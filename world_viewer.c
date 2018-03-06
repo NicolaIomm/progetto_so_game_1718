@@ -1,5 +1,15 @@
+#pragma GCC diagnostic push                                   //
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"    // These 2 lines and the last one are for 
+                                                              // ignore Glut deprecated declarations
+                      
+#ifdef __APPLE__
+#include <OpenGL/gl.h>
+#include <GLUT/glut.h>
+#else
 #include <GL/gl.h>
 #include <GL/glut.h>
+#endif
+
 #include <stdio.h>
 #include <math.h>
 #include <assert.h>
@@ -7,6 +17,7 @@
 #include <unistd.h>
 #include "image.h"
 #include "surface.h"
+#include <stdlib.h>
 
 int window;
 
@@ -413,3 +424,5 @@ void WorldViewer_runGlobal(World* world,
   glutMainLoop();
 
 }
+
+#pragma GCC diagnostic pop

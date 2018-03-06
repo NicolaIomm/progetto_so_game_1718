@@ -1,8 +1,7 @@
-CCOPTS= -Wall -g -std=gnu99 -Wstrict-prototypes
-LIBS= -lglut -lGLU -lGL -lm -lpthread
+CCOPTS= -Wall -Wstrict-prototypes -g -std=gnu99 # this doesn't work: -Wno-deprecated-declarations
+LIBS= -lm -lpthread -framework GLUT -framework OpenGL # change with -lglut -lGLU -lGL if run in Linux
 CC=gcc
 AR=ar
-
 
 BINS=libso_game.a\
      so_game\
@@ -32,18 +31,17 @@ HEADERS=helpers.h\
 
 .phony: clean all
 
-
-all:	$(BINS) 
+all:	$(BINS)
 
 libso_game.a: $(OBJS) 
 	$(AR) -rcs $@ $^
 	$(RM) $(OBJS)
 
 so_game: so_game.c libso_game.a 
-	$(CC) $(CCOPTS) -Ofast -o $@ $^ $(LIBS)
+	$(CC) $(CCOPTS) -Ofast -o $@ $^ $(LIBS) 
 
 test_packets_serialization: test_packets_serialization.c libso_game.a  
 	$(CC) $(CCOPTS) -Ofast -o $@ $^  $(LIBS)
 
 clean:
-	rm -rf *.o *~  $(BINS)
+	rm -rf *.dSYM *.o *~  $(BINS)

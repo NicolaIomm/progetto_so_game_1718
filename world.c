@@ -1,5 +1,10 @@
-#include "world.h"
+#ifdef __APPLE__
+#include <GLUT/glut.h>
+#else
 #include <GL/glut.h>
+#endif
+
+#include "world.h"
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
@@ -8,6 +13,7 @@
 #include "image.h"
 #include <sys/time.h>
 #include <assert.h>
+#include <stdlib.h>
 
 void World_destroy(World* w) {
   Surface_destroy(&w->ground);
