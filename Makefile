@@ -1,5 +1,5 @@
 CCOPTS= -Wall -Wstrict-prototypes -g -std=gnu99 # this doesn't work: -Wno-deprecated-declarations
-LIBS= -lm -lpthread -framework GLUT -framework OpenGL # change with -lglut -lGLU -lGL if run in Linux
+LIBS= -lm -lpthread -framework GLUT -framework OpenGL 
 CC=gcc
 AR=ar
 
