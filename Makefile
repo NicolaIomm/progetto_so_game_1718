@@ -5,6 +5,8 @@ AR=ar
 
 BINS=libso_game.a\
      so_game\
+   	 so_game_server\
+	 so_game_client\
      test_packets_serialization 
 
 OBJS = vec3.o\
@@ -27,7 +29,7 @@ HEADERS=helpers.h\
 	world_viewer.h\
 
 %.o:	%.c $(HEADERS)
-	$(CC) $(CCOPTS) -c -o $@  $<
+	$(CC) $(CCOPTS) -c $< -o $@
 
 .phony: clean all
 
@@ -40,8 +42,14 @@ libso_game.a: $(OBJS)
 so_game: so_game.c libso_game.a 
 	$(CC) $(CCOPTS) -Ofast -o $@ $^ $(LIBS) 
 
+so_game_client: so_game_client.c libso_game.a
+	$(CC) $(CCOPTS) -Ofast $^ -o $@ $(LIBS)  
+
+so_game_server: so_game_server.c libso_game.a 
+	$(CC) $(CCOPTS) -Ofast $^ -o $@  $(LIBS) 
+
 test_packets_serialization: test_packets_serialization.c libso_game.a  
 	$(CC) $(CCOPTS) -Ofast -o $@ $^  $(LIBS)
-
+	
 clean:
-	rm -rf *.dSYM *.o *~  $(BINS)
+	rm -rf *.dSYM *.o *~ $(BINS)

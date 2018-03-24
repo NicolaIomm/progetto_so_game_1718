@@ -8,20 +8,43 @@
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 #include "image.h"
 #include "surface.h"
 #include "world.h"
 #include "vehicle.h"
 #include "world_viewer.h"
+#include <pthread.h>
 
-int window;
-WorldViewer viewer;
+#include <arpa/inet.h>  // hton() , inet_addr()
+#include <netinet/in.h> // struct sockaddr_in
+#include <sys/socket.h> // socket()
+
 World world;
 Vehicle* vehicle; // The vehicle
 
-void keyPressed(unsigned char key, int x, int y)
-{
+void print_err(char* msg){
+  fprintf(stderr, "%s", msg);
+  exit(-1);
+}
+
+char* get_hostname_from_arg(char* arg){
+  char* s = strdup(arg);
+  char* ret = strsep(&s, ":");
+  return ret;
+}
+
+int get_portno_from_arg(char* arg){
+  int portno = atoi(strchr(arg, ':') + 1);
+  return portno;
+}
+
+/*
+int window;
+WorldViewer viewer;
+
+void keyPressed(unsigned char key, int x, int y){
   switch(key){
   case 27:
     glutDestroyWindow(window);
@@ -91,39 +114,78 @@ void idle(void) {
   vehicle->translational_force_update *= 0.999;
   vehicle->rotational_force_update *= 0.7;
 }
+*/
 
 int main(int argc, char **argv) {
   if (argc<3) {
-    printf("usage: %s <server_address> <player texture>\n", argv[1]);
+    printf("Usage: %s <server_address> <player texture>\n", argv[0]);
     exit(-1);
   }
 
-  printf("loading texture image from %s ... ", argv[2]);
-  Image* my_texture = Image_load(argv[2]);
-  if (my_texture) {
+    // Casting arguments
+  char* server_ip = get_hostname_from_arg(argv[1]);
+  int server_port = get_portno_from_arg(argv[1]);
+  char* player_texture_path = argv[2];
+  if (server_ip == NULL || server_port == -1 )
+    print_err("Error while reading input arguments. Check <Server_address>.\n");
+
+    // Loading player's texture
+  printf("loading texture image from %s ... ", player_texture_path);
+  Image* player_image = Image_load(player_texture_path);
+  if (player_image) {
     printf("Done! \n");
   } else {
     printf("Fail! \n");
   }
-  
-  Image* my_texture_for_server;
-  // todo: connect to the server
-  //   -get ad id
-  //   -send your texture to the server (so that all can see you)
-  //   -get an elevation map
-  //   -get the texture of the surface
+    
+    // Profile texture = player texture (the blue arrow)
+  Image* profile_image = Image_load(player_texture_path);
+  if (profile_image) {
+    printf("Done! \n");
+  } else {
+    printf("Fail! \n");
+  }
 
-  // these come from the server
+    // Connecting to server to send your image profile and get (id, surface texture, elevation texture)
   int my_id;
   Image* map_elevation;
   Image* map_texture;
   Image* my_texture_from_server;
+    
+  int sockfd;
+  struct sockaddr_in server_addr = {0};
+
+    // Create TCP Socket
+  sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (sockfd < 0) 
+    print_err("Error while opening socket\n");
+
+    // Setting server address
+  server_addr.sin_addr.s_addr = inet_addr(server_ip);
+  server_addr.sin_family      = AF_INET;
+  server_addr.sin_port        = htons(server_port); // don't forget about network byte order!
+
+    // Connecting to server_addr
+  if (connect(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) 
+    print_err("Error while connecting to server\n");
+
+  char buf[1024];
+  int buf_len = sizeof(buf);
+
+  /*
+    ...
+    Exchange of information between server and client
+    ...
+  */
+
+  if (close(sockfd) < 0)
+    print_err("Error while closing socket\n");
 
   // construct the world
   World_init(&world, map_elevation, map_texture, 0.5, 0.5, 0.5);
-  vehicle=(Vehicle*) malloc(sizeof(Vehicle));
-  Vehicle_init(&vehicle, &world, my_id, my_texture_from_server);
-  World_addVehicle(&world, v);
+  vehicle = (Vehicle*) malloc(sizeof(Vehicle));
+  Vehicle_init(vehicle, &world, my_id, my_texture_from_server);
+  World_addVehicle(&world, vehicle);
 
   // spawn a thread that will listen the update messages from
   // the server, and sends back the controls
