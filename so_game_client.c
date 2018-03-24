@@ -17,15 +17,21 @@
 #include "world_viewer.h"
 #include <pthread.h>
 
+#include "so_game_protocol.h"
+
 #include <arpa/inet.h>  // hton() , inet_addr()
 #include <netinet/in.h> // struct sockaddr_in
 #include <sys/socket.h> // socket()
+
+#include <errno.h>
+
+#define INCOMING_DATA_SIZE 1000000
 
 World world;
 Vehicle* vehicle; // The vehicle
 
 void print_err(char* msg){
-  fprintf(stderr, "%s", msg);
+  fprintf(stderr, "%s\n", msg);
   exit(-1);
 }
 
@@ -146,7 +152,7 @@ int main(int argc, char **argv) {
     printf("Fail! \n");
   }
 
-    // Connecting to server to send your image profile and get (id, surface texture, elevation texture)
+    // Connecting to server to exchange information
   int my_id;
   Image* map_elevation;
   Image* map_texture;
@@ -169,17 +175,37 @@ int main(int argc, char **argv) {
   if (connect(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) 
     print_err("Error while connecting to server\n");
 
-  char buf[1024];
-  int buf_len = sizeof(buf);
+    // INFO: send your image profile and get (id, surface texture, elevation texture)
+  char data[INCOMING_DATA_SIZE];
+  int data_len;
+  int data_sent;
+  int data_received;
 
-  /*
-    ...
-    Exchange of information between server and client
-    ...
-  */
+    // Build IdPacket to ask an ID from Server
+  IdPacket* request_id_packet = malloc(sizeof(IdPacket));
+  PacketHeader id_header;
+  id_header.type = GetId;
+  request_id_packet->header = id_header;
+  request_id_packet->id = -1;
 
+    // Sent deserialized IdPacket
+  data_len = Packet_serialize(data, &request_id_packet->header);
+  data_sent = send(sockfd, data, data_len, 0);
+  Packet_free(request_id_packet);
+
+    // Receive serialized IdPacket containing my new ID
+  data_received = recv(sockfd, data, data_len, 0);
+  IdPacket* received_id_packet = Packet_deserialize(data, data_received);
+  my_id = received_id_packet->id;
+  Packet_free(received_id_packet);
+
+  printf("My new ID is: %d\n", my_id);
+
+    // Closing TCP socket
   if (close(sockfd) < 0)
     print_err("Error while closing socket\n");
+
+  exit(0);
 
   // construct the world
   World_init(&world, map_elevation, map_texture, 0.5, 0.5, 0.5);

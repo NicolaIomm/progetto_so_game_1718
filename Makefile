@@ -7,7 +7,7 @@ BINS=libso_game.a\
      so_game\
    	 so_game_server\
 	 so_game_client\
-     test_packets_serialization 
+     test_packets_serialization
 
 OBJS = vec3.o\
        linked_list.o\
