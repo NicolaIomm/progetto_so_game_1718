@@ -124,10 +124,12 @@ void Packet_free(PacketHeader* h) {
   case PostTexture:
   case PostElevation:
   {
-    ImagePacket* img_packet=(ImagePacket*) h;
+		ImagePacket* img_packet=(ImagePacket*) h;
+		/*	Do not free the Image* 
     if (img_packet->image){
       Image_free(img_packet->image);
     }
+		*/
     free (img_packet);
   }
   }
