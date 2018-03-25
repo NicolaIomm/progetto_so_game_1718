@@ -36,7 +36,7 @@ typedef struct {
 // sent from server to client
 //       (with type=PostTexture and id=0) to assign the surface texture
 //       (with type=PostElevation and id=0) to assign the surface texture
-//       (with type=PostTexture and id>0) to assign the  texture to vehicle id
+//       (with type=PostTexture and id>0) to assign the texture to vehicle id
 typedef struct {
   PacketHeader header;
   int id;

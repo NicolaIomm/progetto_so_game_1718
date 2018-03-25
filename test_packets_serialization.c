@@ -80,7 +80,7 @@ int main(int argc, char const *argv[]) {
   Image_save(deserialized_image_packet->image, "out.pgm");
 
   Packet_free(&deserialized_image_packet->header);
-  Packet_free(&deserialized_image_packet->header);
+
   printf("done\n");
 
 
