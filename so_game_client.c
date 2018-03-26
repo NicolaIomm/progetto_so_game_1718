@@ -162,8 +162,8 @@ int main(int argc, char **argv) {
 	
     // Build IdPacket to ask an ID from Server
   IdPacket* request_id_packet = malloc(sizeof(IdPacket));
-  PacketHeader id_header;
-  id_header.type = GetId;
+    PacketHeader id_header;
+    id_header.type = GetId;
   request_id_packet->header = id_header;
   request_id_packet->id = -1;
 
