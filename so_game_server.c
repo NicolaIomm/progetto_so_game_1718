@@ -42,16 +42,16 @@ void* thread_handler_TCP(void* arg){
 
   char data[INCOMING_DATA_SIZE];
     int data_len;
-    
+
     data_len = receivePacket(socket_desc, data);
     IdPacket* received_id_packet = (IdPacket*) Packet_deserialize(data, data_len);
-    
+
     printf("Received requestIDPacket\n");
-    
+
     int id_received = received_id_packet->id;
     if (id_received == -1){
             // Build IdPacket to ask an ID from Server
-        IdPacket* request_id_packet = malloc(sizeof(IdPacket));
+        IdPacket* request_id_packet = (IdPacket*)malloc(sizeof(IdPacket));
           PacketHeader id_header;
           id_header.type = GetId;
         request_id_packet->header = id_header;
@@ -62,34 +62,34 @@ void* thread_handler_TCP(void* arg){
         sendPacket(socket_desc, data, data_len);
         Packet_free((PacketHeader*) request_id_packet);
     }
-    
+
     Packet_free((PacketHeader*) received_id_packet);
-    
+
     printf("Sent a new IDPacket to client\n");
-    
+
       // Reveive the player's texture from client
     data_len = receivePacket(socket_desc, data);
     ImagePacket* received_profile_texture = (ImagePacket*) Packet_deserialize(data, data_len);
-    
+
     Image* profile_texture_image = received_profile_texture->image;
-    
+
     Packet_free((PacketHeader*) received_profile_texture);
-    
+
     printf("Received profile texture from client\n");
 
       // Resend the player's texture to client to confirm the texture
-    ImagePacket* confirmed_player_texture = malloc(sizeof(ImagePacket));
+    ImagePacket* confirmed_player_texture = (ImagePacket*)malloc(sizeof(ImagePacket));
       PacketHeader confirmed_player_texture_header;
       confirmed_player_texture_header.type = PostTexture;
     confirmed_player_texture->header = confirmed_player_texture_header;
     confirmed_player_texture->id = 22;
     confirmed_player_texture->image = profile_texture_image;
-    
+
     data_len = Packet_serialize(data, &confirmed_player_texture->header);
     sendPacket(socket_desc, data, data_len);
 
     Packet_free((PacketHeader*) confirmed_player_texture);
-    
+
     /* End of your code */
 
     // close socket
@@ -147,7 +147,7 @@ int main(int argc, char **argv) {
   // World_addVehicle(&world, vehicle);
 
 
-  
+
   // // initialize GL
   // glutInit(&argc, argv);
   // glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
@@ -159,10 +159,10 @@ int main(int argc, char **argv) {
   // glutSpecialFunc(specialInput);
   // glutKeyboardFunc(keyPressed);
   // glutReshapeFunc(reshape);
-  
+
   // WorldViewer_init(&viewer, &world, vehicle);
 
-  
+
   // // run the main GL loop
   // glutMainLoop();
 
@@ -220,7 +220,7 @@ int main(int argc, char **argv) {
       print_err("Cannot listen on socket");
 
   // we allocate client_addr dynamically and initialize it to zero
-  struct sockaddr_in* client_addr = calloc(1, sizeof(struct sockaddr_in));
+  struct sockaddr_in* client_addr = (sockaddr_in*)calloc(1, sizeof(sockaddr_in));
 
   // loop to handle incoming connections serially
   while (1) {
@@ -252,7 +252,7 @@ int main(int argc, char **argv) {
 
 
 
-      
+
 
       // reset fields in client_addr
       memset(client_addr, 0, sizeof(struct sockaddr_in));
@@ -263,7 +263,7 @@ int main(int argc, char **argv) {
   exit(EXIT_SUCCESS); // this will never be executed
 
 
-  return 0;             
+  return 0;
 }
 
 /*
