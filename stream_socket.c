@@ -5,6 +5,8 @@
 
 #include <arpa/inet.h>  // hton() , inet_addr()
 
+#pragma GCC diagnostic ignored "-Wwrite-strings"
+
 void print_err(char* msg){
   fprintf(stderr, "%s\n", msg);
   exit(-1);
@@ -35,10 +37,10 @@ int sendPacket(int socket, char* data, int data_len){
 			print_err("Error while writing on socket.");
 		bytes_sent += ret;
 	}
-	
+
 	printf("Stream_Socket:\n");
 	printf("\tData size: %d\n", data_len);
-	
+
 	bytes_sent = 0;
 	while (bytes_sent < data_len){
 		ret = send(socket, data+bytes_sent, data_len-bytes_sent, 0);
@@ -48,9 +50,9 @@ int sendPacket(int socket, char* data, int data_len){
 			print_err("Error while writing on socket.");
 		bytes_sent += ret;
 	}
-	
+
 	printf("\tData sent: %d\n", bytes_sent);
-	
+
 	return bytes_sent;
 }
 
@@ -68,12 +70,12 @@ int receivePacket(int socket, char* data){
 			print_err("Error while reading from socket.");
 		bytes_received += ret;
 	}
-	
+
 	int data_len = ntohl(size);
-	
+
 	printf("Stream_Socket:\n");
 	printf("\tData size: %d\n", data_len);
-	
+
 	bytes_received = 0;
 	while (bytes_received < data_len){
 		ret = recv(socket, data+bytes_received, data_len-bytes_received, 0);
@@ -83,8 +85,8 @@ int receivePacket(int socket, char* data){
 			print_err("Error while writing on socket.");
 		bytes_received += ret;
 	}
-	
+
 	printf("\tData received: %d\n", bytes_received);
-	
+
 	return bytes_received;
 }

@@ -7,8 +7,10 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#pragma GCC diagnostic ignored "-Wwrite-strings"
+
 static const int MAX_SIZE=1024*1024;
-  
+
 void Image_free(Image* img) {
   free(img->data);
   free(img->row_data);
@@ -19,35 +21,35 @@ Image* Image_alloc(int rows, int cols, PixelType type){
   int bpp=1;
   int channels = 1;
   switch(type) {
-  case MONO8: 
-    bpp=1; 
-    channels = 1; 
+  case MONO8:
+    bpp=1;
+    channels = 1;
     break;
-  case MONO16: 
-    bpp=2; 
-    channels = 1; 
+  case MONO16:
+    bpp=2;
+    channels = 1;
     break;
-  case RGB8: 
-    bpp=3; 
-    channels = 3; 
+  case RGB8:
+    bpp=3;
+    channels = 3;
     break;
-  case RGB16: 
-    bpp=6; 
-    channels = 3; 
+  case RGB16:
+    bpp=6;
+    channels = 3;
     break;
-  case FLOATMONO: 
-    bpp=sizeof(float); 
-    channels = 1; 
+  case FLOATMONO:
+    bpp=sizeof(float);
+    channels = 1;
     break;
-  case FLOATRGB: 
-    bpp=sizeof(float)*3; 
-    channels = 3; 
+  case FLOATRGB:
+    bpp=sizeof(float)*3;
+    channels = 3;
     break;
   }
 
-  Image* img = malloc(sizeof(Image));
+  Image* img = (Image*)malloc(sizeof(Image));
   img->rows = rows;
-  img->cols = cols;					
+  img->cols = cols;
   img->channels = channels;
   img->data = (unsigned char*) malloc(rows*cols*bpp);
   img->row_data = (unsigned char**) malloc(sizeof(unsigned char*)*rows);
@@ -125,7 +127,7 @@ Image* Image_deserialize(const char* buffer, int size) {
     return 0;
   buffer+=char_read;
   size-=char_read;
-  
+
   sscanf(line, "%s", magic_number);
   do{
     char_read=getLine(line, buffer, size);
@@ -147,7 +149,7 @@ Image* Image_deserialize(const char* buffer, int size) {
   buffer+=char_read;
   size-=char_read;
   sscanf(line, "%d\n", &maxval);
-  
+
   PixelType type=MONO8;
   if (! strcmp("P5", magic_number)) {
     if (maxval>255) {
@@ -200,7 +202,7 @@ int Image_save(Image* img, const char* filename) {
 
 
 Image* Image_convert(Image* src, PixelType type){
-  
+
   float scale;
   if (src->type == MONO8 && type == FLOATMONO) {
     scale=1./255;
@@ -211,9 +213,9 @@ Image* Image_convert(Image* src, PixelType type){
   } else if (src->type == RGB16 && type == FLOATRGB){
     scale=1./65535;
   } else return 0;
-  
+
   Image* img=Image_alloc(src->rows, src->cols, type);
-  
+
   for (int r=0; r<src->rows; r++){
     float* destptr=(float*) img->row_data[r];
     unsigned char* srcptr = src->row_data[r];

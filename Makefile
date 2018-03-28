@@ -1,4 +1,4 @@
-CCOPTS= -Wall -Wstrict-prototypes -g -std=c99 # this doesn't work: -Wno-deprecated-declarations
+CCOPTS= -Wno-write-strings -w  -g  -std=c99 #-Wno-deprecated-declarations #-Wall -Wstrict-prototypes
 LIBS= -lm -lpthread -lglut -lGLU -lGL
 CC=g++
 AR=ar
