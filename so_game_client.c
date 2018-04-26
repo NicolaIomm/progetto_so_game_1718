@@ -95,7 +95,7 @@ void idle(void) {
   World_update(&world);
   usleep(30000);
   glutPostRedisplay();
-  
+
   // decay the commands
   vehicle->translational_force_update *= 0.999;
   vehicle->rotational_force_update *= 0.7;
@@ -123,7 +123,7 @@ int main(int argc, char **argv) {
   } else {
     printf("Fail! *****\n\n");
   }
-    
+
     // Loading profile texture		// CHANGE THIS !!!
 	printf("\t\t ***** Loading profile texture image from %s ... ", player_texture_path);
   Image* profile_image = Image_load(player_texture_path);
@@ -138,13 +138,13 @@ int main(int argc, char **argv) {
 	Image* my_texture_from_server;
 	Image* map_texture;
   Image* map_elevation;
-    
+
   int sockfd;
   struct sockaddr_in server_addr = {0};
 
     // Create TCP Socket
   sockfd = socket(AF_INET, SOCK_STREAM, 0);
-  if (sockfd < 0) 
+  if (sockfd < 0)
     print_err("Error while opening socket\n");
 
     // Setting server address
@@ -153,15 +153,15 @@ int main(int argc, char **argv) {
   server_addr.sin_port        = htons(server_port); // don't forget about network byte order!
 
     // Connecting to server_addr
-  if (connect(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) 
+  if (connect(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0)
     print_err("Error while connecting to server\n");
 
     // INFO: send your image profile and get (id, surface texture, elevation texture)
   char data[INCOMING_DATA_SIZE];
 	int data_len;
-	
+
     // Build IdPacket to ask an ID from Server
-  IdPacket* request_id_packet = malloc(sizeof(IdPacket));
+  IdPacket* request_id_packet = (IdPacket*) malloc(sizeof(IdPacket));
     PacketHeader id_header;
     id_header.type = GetId;
   request_id_packet->header = id_header;
@@ -176,82 +176,82 @@ int main(int argc, char **argv) {
 
     // Receive serialized IdPacket containing my new ID
 	data_len = receivePacket(sockfd, data);
-	
+
   IdPacket* received_id_packet = (IdPacket*) Packet_deserialize(data, data_len);
   my_id = received_id_packet->id;
   Packet_free((PacketHeader *) received_id_packet);
 
   printf("\t\t ***** ID assigned from server: %d *****\n\n", my_id);
-	
+
 		// Build ImagePacket to send profile's texture
-  ImagePacket* profile_texture_packet = malloc(sizeof(ImagePacket));
+  ImagePacket* profile_texture_packet = (ImagePacket*) malloc(sizeof(ImagePacket));
 		  PacketHeader profile_texture_packet_header;
 		  profile_texture_packet_header.type = PostTexture;
   profile_texture_packet->header = profile_texture_packet_header;
   profile_texture_packet->id = my_id;
 	profile_texture_packet->image = profile_image;
-	
+
     // Send serialized ImagePacket containing image profile
   data_len = Packet_serialize(data, &profile_texture_packet->header);
   sendPacket(sockfd, data, data_len);
   Packet_free((PacketHeader *) profile_texture_packet);
 
 	printf("Your profile texture has been sent to server. Waiting for agreement..\n");
-	
-    // Receive serialized ImagePacket containing the server copy of image profile 
+
+    // Receive serialized ImagePacket containing the server copy of image profile
 	data_len = receivePacket(sockfd, data);
   ImagePacket* received_profile_texture_packet = (ImagePacket*) Packet_deserialize(data, data_len);
   my_texture_from_server = received_profile_texture_packet->image;
 	Packet_free((PacketHeader *) received_profile_texture_packet);
-	
+
 	printf("\t\t ***** Server agreed your profile texture! *****\n\n");
-	
+
 		// Build ImagePacket asking texture_surface to server
-	ImagePacket* request_texture_surface = malloc(sizeof(ImagePacket));
+	ImagePacket* request_texture_surface = (ImagePacket*) malloc(sizeof(ImagePacket));
 		PacketHeader request_texture_surface_header;
 		request_texture_surface_header.type = GetTexture;
 	request_texture_surface->header = request_texture_surface_header;
 	request_texture_surface->id = my_id;
 	request_texture_surface->image = NULL;
-	
+
     // Send serialized ImagePacket containing the request for texture_surface
   data_len = Packet_serialize(data, &request_texture_surface->header);
   sendPacket(sockfd, data, data_len);
   Packet_free((PacketHeader *) request_texture_surface);
-	
+
 	printf("Asking for the texture_surface to server...\n");
-	
+
     // Receive serialized ImagePacket containing the texture_surface
 	data_len = receivePacket(sockfd, data);
   ImagePacket* texture_surface_packet = (ImagePacket*) Packet_deserialize(data, data_len);
   map_texture = texture_surface_packet->image;
 	Packet_free((PacketHeader *) texture_surface_packet);
-	
+
 	printf("\t\t ***** Texture surface received succesfully from server! *****\n\n");
-	
+
 		// Build ImagePacket asking texture_elevation to server
-	ImagePacket* request_texture_elevation = malloc(sizeof(ImagePacket));
+	ImagePacket* request_texture_elevation = (ImagePacket*) malloc(sizeof(ImagePacket));
 		PacketHeader request_texture_elevation_header;
 		request_texture_elevation_header.type = GetElevation;
 	request_texture_elevation->header = request_texture_elevation_header;
 	request_texture_elevation->id = my_id;
 	request_texture_elevation->image = NULL;
-	
+
     // Send serialized ImagePacket containing the request for texture_elevation
   data_len = Packet_serialize(data, &request_texture_elevation->header);
   sendPacket(sockfd, data, data_len);
   Packet_free((PacketHeader *) request_texture_elevation);
-	
+
 	printf("Asking for the texture_elevation to server...\n");
-	
+
     // Receive serialized ImagePacket containing the texture_elevation
 	data_len = receivePacket(sockfd, data);
   ImagePacket* texture_elevation_packet = (ImagePacket*) Packet_deserialize(data, data_len);
   map_elevation = texture_elevation_packet->image;
 	Packet_free((PacketHeader *) texture_elevation_packet);
-	
+
 	printf("\t\t ***** Texture elevation received succesfully from server! *****\n\n");
-	
+
 		// Initial exchange of information Terminated
     // Closing TCP socket
   if (close(sockfd) < 0)
@@ -279,5 +279,5 @@ int main(int argc, char **argv) {
 
   // cleanup
   World_destroy(&world);
-  return 0;             
+  return 0;
 }
