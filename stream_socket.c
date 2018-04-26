@@ -7,6 +7,8 @@
 
 #pragma GCC diagnostic ignored "-Wwrite-strings"
 
+#define DEBUG 0
+
 void print_err(char* msg){
   fprintf(stderr, "%s\n", msg);
   exit(-1);
@@ -23,7 +25,7 @@ int get_portno_from_arg(char* arg){
   return portno;
 }
 
-int sendPacket(int socket, char* data, int data_len){
+int sendPacketTCP(int socket, char* data, int data_len){
 	int ret;
 	int bytes_sent;
 	uint32_t size = htonl(data_len);
@@ -38,8 +40,10 @@ int sendPacket(int socket, char* data, int data_len){
 		bytes_sent += ret;
 	}
 
-	printf("Stream_Socket:\n");
-	printf("\tData size: %d\n", data_len);
+    if (DEBUG){
+        printf("Stream_Socket:\n");
+        printf("\tData size: %d\n", data_len);
+    }
 
 	bytes_sent = 0;
 	while (bytes_sent < data_len){
@@ -51,12 +55,13 @@ int sendPacket(int socket, char* data, int data_len){
 		bytes_sent += ret;
 	}
 
-	printf("\tData sent: %d\n", bytes_sent);
+    if (DEBUG)
+        printf("\tData sent: %d\n", bytes_sent);
 
 	return bytes_sent;
 }
 
-int receivePacket(int socket, char* data){
+int receivePacketTCP(int socket, char* data){
 	int ret;
 	int bytes_received;
 	uint32_t size;
@@ -73,8 +78,10 @@ int receivePacket(int socket, char* data){
 
 	int data_len = ntohl(size);
 
-	printf("Stream_Socket:\n");
-	printf("\tData size: %d\n", data_len);
+    if (DEBUG){
+        printf("Stream_Socket:\n");
+        printf("\tData size: %d\n", data_len);
+    }
 
 	bytes_received = 0;
 	while (bytes_received < data_len){
@@ -86,7 +93,8 @@ int receivePacket(int socket, char* data){
 		bytes_received += ret;
 	}
 
-	printf("\tData received: %d\n", bytes_received);
+    if (DEBUG)
+        printf("\tData received: %d\n", bytes_received);
 
 	return bytes_received;
 }

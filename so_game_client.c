@@ -169,13 +169,13 @@ int main(int argc, char **argv) {
 
     // Send deserialized IdPacket
 	data_len = Packet_serialize(data, &request_id_packet->header);
-	sendPacket(sockfd, data, data_len);
+	sendPacketTCP(sockfd, data, data_len);
 	Packet_free((PacketHeader *) request_id_packet);
 
 	printf("Asking for an ID to server...\n");
 
     // Receive serialized IdPacket containing my new ID
-	data_len = receivePacket(sockfd, data);
+	data_len = receivePacketTCP(sockfd, data);
 
   IdPacket* received_id_packet = (IdPacket*) Packet_deserialize(data, data_len);
   my_id = received_id_packet->id;
@@ -193,13 +193,13 @@ int main(int argc, char **argv) {
 
     // Send serialized ImagePacket containing image profile
   data_len = Packet_serialize(data, &profile_texture_packet->header);
-  sendPacket(sockfd, data, data_len);
+  sendPacketTCP(sockfd, data, data_len);
   Packet_free((PacketHeader *) profile_texture_packet);
 
 	printf("Your profile texture has been sent to server. Waiting for agreement..\n");
 
     // Receive serialized ImagePacket containing the server copy of image profile
-	data_len = receivePacket(sockfd, data);
+	data_len = receivePacketTCP(sockfd, data);
   ImagePacket* received_profile_texture_packet = (ImagePacket*) Packet_deserialize(data, data_len);
   my_texture_from_server = received_profile_texture_packet->image;
 	Packet_free((PacketHeader *) received_profile_texture_packet);
@@ -216,18 +216,18 @@ int main(int argc, char **argv) {
 
     // Send serialized ImagePacket containing the request for texture_surface
   data_len = Packet_serialize(data, &request_texture_surface->header);
-  sendPacket(sockfd, data, data_len);
+  sendPacketTCP(sockfd, data, data_len);
   Packet_free((PacketHeader *) request_texture_surface);
 
 	printf("Asking for the texture_surface to server...\n");
 
     // Receive serialized ImagePacket containing the texture_surface
-	data_len = receivePacket(sockfd, data);
+	data_len = receivePacketTCP(sockfd, data);
   ImagePacket* texture_surface_packet = (ImagePacket*) Packet_deserialize(data, data_len);
   map_texture = texture_surface_packet->image;
 	Packet_free((PacketHeader *) texture_surface_packet);
 
-	printf("\t\t ***** Texture surface received succesfully from server! *****\n\n");
+	printf("\t\t ***** Texture surface received successfully from server! *****\n\n");
 
 		// Build ImagePacket asking texture_elevation to server
 	ImagePacket* request_texture_elevation = (ImagePacket*) malloc(sizeof(ImagePacket));
@@ -239,13 +239,13 @@ int main(int argc, char **argv) {
 
     // Send serialized ImagePacket containing the request for texture_elevation
   data_len = Packet_serialize(data, &request_texture_elevation->header);
-  sendPacket(sockfd, data, data_len);
+  sendPacketTCP(sockfd, data, data_len);
   Packet_free((PacketHeader *) request_texture_elevation);
 
 	printf("Asking for the texture_elevation to server...\n");
 
     // Receive serialized ImagePacket containing the texture_elevation
-	data_len = receivePacket(sockfd, data);
+	data_len = receivePacketTCP(sockfd, data);
   ImagePacket* texture_elevation_packet = (ImagePacket*) Packet_deserialize(data, data_len);
   map_elevation = texture_elevation_packet->image;
 	Packet_free((PacketHeader *) texture_elevation_packet);

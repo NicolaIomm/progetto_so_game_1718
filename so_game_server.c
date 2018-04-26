@@ -43,7 +43,7 @@ void* thread_handler_TCP(void* arg){
   char data[INCOMING_DATA_SIZE];
     int data_len;
 
-    data_len = receivePacket(socket_desc, data);
+    data_len = receivePacketTCP(socket_desc, data);
     IdPacket* received_id_packet = (IdPacket*) Packet_deserialize(data, data_len);
 
     printf("Received requestIDPacket\n");
@@ -59,7 +59,7 @@ void* thread_handler_TCP(void* arg){
 
         // Sent deserialized IdPacket
         data_len = Packet_serialize(data, &request_id_packet->header);
-        sendPacket(socket_desc, data, data_len);
+        sendPacketTCP(socket_desc, data, data_len);
         Packet_free((PacketHeader*) request_id_packet);
     }
 
@@ -68,7 +68,7 @@ void* thread_handler_TCP(void* arg){
     printf("Sent a new IDPacket to client\n");
 
       // Reveive the player's texture from client
-    data_len = receivePacket(socket_desc, data);
+    data_len = receivePacketTCP(socket_desc, data);
     ImagePacket* received_profile_texture = (ImagePacket*) Packet_deserialize(data, data_len);
 
     Image* profile_texture_image = received_profile_texture->image;
@@ -86,7 +86,7 @@ void* thread_handler_TCP(void* arg){
     confirmed_player_texture->image = profile_texture_image;
 
     data_len = Packet_serialize(data, &confirmed_player_texture->header);
-    sendPacket(socket_desc, data, data_len);
+    sendPacketTCP(socket_desc, data, data_len);
 
     Packet_free((PacketHeader*) confirmed_player_texture);
 
