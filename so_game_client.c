@@ -108,6 +108,8 @@ int main(int argc, char **argv) {
     exit(-1);
   }
 
+  int ret;
+
     // Casting arguments
   char* server_ip = get_hostname_from_arg(argv[1]);
   int server_port = get_portno_from_arg(argv[1]);
@@ -134,10 +136,10 @@ int main(int argc, char **argv) {
   }
 
     // Connecting to server to exchange information
-  int my_id;
-	Image* my_texture_from_server;
+    int my_id;
+    Image* my_texture_from_server;
 	Image* map_texture;
-  Image* map_elevation;
+    Image* map_elevation;
 
   int sockfd;
   struct sockaddr_in server_addr = {0};
@@ -205,7 +207,7 @@ int main(int argc, char **argv) {
 	Packet_free((PacketHeader *) received_profile_texture_packet);
 
 	printf("\t\t ***** Server agreed your profile texture! *****\n\n");
-
+/*
 		// Build ImagePacket asking texture_surface to server
 	ImagePacket* request_texture_surface = (ImagePacket*) malloc(sizeof(ImagePacket));
 		PacketHeader request_texture_surface_header;
@@ -246,26 +248,55 @@ int main(int argc, char **argv) {
 
     // Receive serialized ImagePacket containing the texture_elevation
 	data_len = receivePacketTCP(sockfd, data);
-  ImagePacket* texture_elevation_packet = (ImagePacket*) Packet_deserialize(data, data_len);
-  map_elevation = texture_elevation_packet->image;
+        ImagePacket* texture_elevation_packet = (ImagePacket*) Packet_deserialize(data, data_len);
+        map_elevation = texture_elevation_packet->image;
 	Packet_free((PacketHeader *) texture_elevation_packet);
 
 	printf("\t\t ***** Texture elevation received succesfully from server! *****\n\n");
+*/
 
-		// Initial exchange of information Terminated
+    map_elevation = Image_load("./images/maze.pgm");
+    if (map_elevation) {
+    printf("Done! \n");
+    } else {
+    printf("Fail! \n");
+    }
+
+    map_texture = Image_load("./images/depth1.pgm");
+    if (map_texture) {
+    printf("Done! \n");
+    } else {
+    printf("Fail! \n");
+    }
+
     // Closing TCP socket
-  if (close(sockfd) < 0)
-    print_err("Error while closing socket\n");
+    ret = close(sockfd);
+    if (ret < 0)
+        print_err("Error while closing socket\n");
 
 	printf("\t\t ***** Closing TCP Connection! *****\n\n");
 
-  exit(0);
-
-  // construct the world
+    // construct the world
   World_init(&world, map_elevation, map_texture, 0.5, 0.5, 0.5);
+
+    // construct and init my vehicle
   vehicle = (Vehicle*) malloc(sizeof(Vehicle));
   Vehicle_init(vehicle, &world, my_id, my_texture_from_server);
-  World_addVehicle(&world, vehicle);
+
+  		// Build ClientUpdate packet to send my vehicle
+  ClientUpdate* my_vehicle_packet = (ClientUpdate*) malloc(sizeof(ClientUpdate));
+		  PacketHeader my_vehicle_packet_header;
+		  my_vehicle_packet_header.type = VechicleUpdate;
+  my_vehicle_packet->header = my_vehicle_packet_header;
+  my_vehicle_packet->id = my_id;
+  my_vehicle_packet->x = vehicle->x;
+  my_vehicle_packet->y = vehicle->y;
+  my_vehicle_packet->theta = vehicle->theta;
+
+        // Send ClientUpdate packet to UDP Server
+  data_len = Packet_serialize(data, &my_vehicle_packet->header);
+  sendPacketUDP(sockfd, data, data_len);
+  Packet_free((PacketHeader *) my_vehicle_packet);
 
   // spawn a thread that will listen the update messages from
   // the server, and sends back the controls
