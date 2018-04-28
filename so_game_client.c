@@ -13,8 +13,8 @@
 #include "image.h"
 #include "surface.h"
 #include "world.h"
-#include "vehicle.h"
 #include "world_viewer.h"
+#include "vehicle.h"
 #include <pthread.h>
 
 #include <sys/socket.h> // socket(), connect()
@@ -26,81 +26,88 @@
 
 #define INCOMING_DATA_SIZE 1000000
 
+    // INFO: send your image profile and get (id, surface texture, elevation texture)
+char data[INCOMING_DATA_SIZE];
+int data_len;
+
 World world;
 Vehicle* vehicle; // The vehicle
 
-/*
-int window;
-WorldViewer viewer;
+void* update_handler_UDP(void* arg_null){
 
-void keyPressed(unsigned char key, int x, int y){
-  switch(key){
-  case 27:
-    glutDestroyWindow(window);
-    exit(0);
-  case ' ':
-    vehicle->translational_force_update = 0;
-    vehicle->rotational_force_update = 0;
-    break;
-  case '+':
-    viewer.zoom *= 1.1f;
-    break;
-  case '-':
-    viewer.zoom /= 1.1f;
-    break;
-  case '1':
-    viewer.view_type = Inside;
-    break;
-  case '2':
-    viewer.view_type = Outside;
-    break;
-  case '3':
-    viewer.view_type = Global;
-    break;
+  int sockfd;
+  int repeat_flag = 1;  // Set to 0 when you don't want anymore to repeat
+
+  while (repeat_flag){
+
+        // Receive serialized WorldUpdatePacket containing all vehicle in the world
+      data_len = receivePacketUDP(sockfd, data);
+        WorldUpdatePacket* world_update_packet = (WorldUpdatePacket*) Packet_deserialize(data, data_len);
+        int n = world_update_packet->num_vehicles;
+        ClientUpdate* updates_vec = world_update_packet->updates;
+      Packet_free((PacketHeader *) world_update_packet);
+
+        // Update all vehicles in the world
+      int i;
+      for (i = 0; i < n; i++){
+        int current_vehicle_id = updates_vec[i].id;
+        Vehicle* current_vehicle = World_getVehicle(&world, current_vehicle_id);
+        if (current_vehicle == NULL){
+            Vehicle* new_vehicle = (Vehicle*) malloc(sizeof(Vehicle));
+            Image* vehicle_texture;
+
+                // Build ImagePacket to ask the vehicle texture with id = current_vehicle_id
+            ImagePacket* new_vehicle_texture = (ImagePacket*) malloc(sizeof(ImagePacket));
+                  PacketHeader new_vehicle_texture_header;
+                  new_vehicle_texture_header.type = GetTexture;
+            new_vehicle_texture->header = new_vehicle_texture_header;
+            new_vehicle_texture->id = current_vehicle_id;
+            new_vehicle_texture->image = NULL;
+
+            // Send serialized ImagePacket containing image profile
+            data_len = Packet_serialize(data, &new_vehicle_texture->header);
+            sendPacketUDP(sockfd, data, data_len);
+            Packet_free((PacketHeader *) new_vehicle_texture);
+
+            // Receive serialized ImagePacket containing the server copy of image profile
+            data_len = receivePacketUDP(sockfd, data);
+                ImagePacket* received_new_vehicle_texture = (ImagePacket*) Packet_deserialize(data, data_len);
+                vehicle_texture = received_new_vehicle_texture->image;
+            Packet_free((PacketHeader *) received_new_vehicle_texture);
+
+            Vehicle_init(new_vehicle, &world, current_vehicle_id, vehicle_texture);
+
+            World_addVehicle(&world, new_vehicle);
+        }
+        else {
+          ClientUpdate* current_update = updates_vec+i;
+          current_vehicle->x = current_update->x;
+          current_vehicle->y = current_update->y;
+          current_vehicle->theta = current_update->theta;
+        }
+
+      }
+
+        // Update the world including all vehicles position
+      World_update(&world);
+
+        // Build VehicleUpdatePacket packet to send my vehicle
+      VehicleUpdatePacket* my_vehicle_packet = (VehicleUpdatePacket*) malloc(sizeof(VehicleUpdatePacket));
+              PacketHeader my_vehicle_packet_header;
+              my_vehicle_packet_header.type = VehicleUpdate;
+      my_vehicle_packet->header = my_vehicle_packet_header;
+      my_vehicle_packet->id = vehicle->id;
+      my_vehicle_packet->rotational_force = vehicle->rotational_force_update;
+      my_vehicle_packet->translational_force = vehicle->translational_force_update;
+
+            // Send VehicleUpdatePacket packet to UDP Server
+      data_len = Packet_serialize(data, &my_vehicle_packet->header);
+      //sendPacketUDP(sockfd, data, data_len);
+      Packet_free((PacketHeader *) my_vehicle_packet);
   }
-}
 
-void specialInput(int key, int x, int y) {
-  switch(key){
-  case GLUT_KEY_UP:
-    vehicle->translational_force_update += 0.1;
-    break;
-  case GLUT_KEY_DOWN:
-    vehicle->translational_force_update -= 0.1;
-    break;
-  case GLUT_KEY_LEFT:
-    vehicle->rotational_force_update += 0.1;
-    break;
-  case GLUT_KEY_RIGHT:
-    vehicle->rotational_force_update -= 0.1;
-    break;
-  case GLUT_KEY_PAGE_UP:
-    viewer.camera_z+=0.1;
-    break;
-  case GLUT_KEY_PAGE_DOWN:
-    viewer.camera_z-=0.1;
-    break;
-  }
+  return NULL;
 }
-
-void display(void) {
-  WorldViewer_draw(&viewer);
-}
-
-void reshape(int width, int height) {
-  WorldViewer_reshapeViewport(&viewer, width, height);
-}
-
-void idle(void) {
-  World_update(&world);
-  usleep(30000);
-  glutPostRedisplay();
-
-  // decay the commands
-  vehicle->translational_force_update *= 0.999;
-  vehicle->rotational_force_update *= 0.7;
-}
-*/
 
 int main(int argc, char **argv) {
   if (argc<3) {
@@ -157,10 +164,6 @@ int main(int argc, char **argv) {
     // Connecting to server_addr
   if (connect(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0)
     print_err("Error while connecting to server\n");
-
-    // INFO: send your image profile and get (id, surface texture, elevation texture)
-  char data[INCOMING_DATA_SIZE];
-	int data_len;
 
     // Build IdPacket to ask an ID from Server
   IdPacket* request_id_packet = (IdPacket*) malloc(sizeof(IdPacket));
@@ -283,29 +286,25 @@ int main(int argc, char **argv) {
   vehicle = (Vehicle*) malloc(sizeof(Vehicle));
   Vehicle_init(vehicle, &world, my_id, my_texture_from_server);
 
-  		// Build ClientUpdate packet to send my vehicle
-  ClientUpdate* my_vehicle_packet = (ClientUpdate*) malloc(sizeof(ClientUpdate));
-		  PacketHeader my_vehicle_packet_header;
-		  my_vehicle_packet_header.type = VechicleUpdate;
-  my_vehicle_packet->header = my_vehicle_packet_header;
-  my_vehicle_packet->id = my_id;
-  my_vehicle_packet->x = vehicle->x;
-  my_vehicle_packet->y = vehicle->y;
-  my_vehicle_packet->theta = vehicle->theta;
-
-        // Send ClientUpdate packet to UDP Server
-  data_len = Packet_serialize(data, &my_vehicle_packet->header);
-  sendPacketUDP(sockfd, data, data_len);
-  Packet_free((PacketHeader *) my_vehicle_packet);
-
   // spawn a thread that will listen the update messages from
   // the server, and sends back the controls
   // the update for yourself are written in the desired_*_force
   // fields of the vehicle variable
   // when the server notifies a new player has joined the game
   // request the texture and add the player to the pool
-  /*FILLME*/
 
+  pthread_t update_thread;
+  ret = pthread_create(&update_thread, NULL, update_handler_UDP, (void*)vehicle);
+  if (ret != 0)
+    print_err("Cannot create the update_handler_UDP thread");
+
+  printf("Started new update handler thread.\n");
+
+  ret = pthread_detach(update_thread);
+  if (ret != 0)
+    print_err("Cannot detach the update_handler_UDP thread");
+
+    // Start the world viewer from your vehicle point of view
   WorldViewer_runGlobal(&world, vehicle, &argc, argv);
 
   // cleanup

@@ -98,3 +98,11 @@ int receivePacketTCP(int socket, char* data){
 
 	return bytes_received;
 }
+
+int sendPacketUDP(int socket, char* data, int data_len){
+  return 0;
+}
+
+int receivePacketUDP(int socket, char* data){
+  return 0;
+}

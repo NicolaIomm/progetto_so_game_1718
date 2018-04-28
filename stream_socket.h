@@ -8,3 +8,6 @@ int sendPacketTCP(int socket, char* data, int data_len);
 
 int receivePacketTCP(int socket, char* data);
 
+int sendPacketUDP(int socket, char* data, int data_len);
+
+int receivePacketUDP(int socket, char* data);
