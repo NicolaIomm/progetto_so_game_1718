@@ -94,7 +94,7 @@ PacketHeader* Packet_deserialize(const char* buffer, int size){
       return (PacketHeader*) world_packet;
     }
     case VehicleUpdate:
-    { 
+    {
       VehicleUpdatePacket* vehicle_packet=(VehicleUpdatePacket*) malloc(sizeof(VehicleUpdatePacket));
       memcpy(vehicle_packet, buffer, sizeof(VehicleUpdatePacket));
       return(PacketHeader*) vehicle_packet;
@@ -116,8 +116,10 @@ void Packet_free(PacketHeader* h) {
   case WorldUpdate:
   {
     WorldUpdatePacket* world_packet=(WorldUpdatePacket*) h;
+    /*	Do not free the updates vector -> manually freed after being used
     if (world_packet->num_vehicles)
       free(world_packet->updates);
+		*/
     free(world_packet);
     return;
   }
@@ -125,7 +127,7 @@ void Packet_free(PacketHeader* h) {
   case PostElevation:
   {
 		ImagePacket* img_packet=(ImagePacket*) h;
-		/*	Do not free the Image* 
+		/*	Do not free the Image  -> manually freed after being used*
     if (img_packet->image){
       Image_free(img_packet->image);
     }

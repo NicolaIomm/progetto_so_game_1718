@@ -17,7 +17,7 @@ typedef struct Vehicle {
   // these are the forces that will be applied after the update
   float translational_force_update;
   float rotational_force_update;
-  float x,y, z, theta; //position and orientation of the vehicle, on the surface
+  float x,y,z, theta; //position and orientation of the vehicle, on the surface
 
 
   // dont' touch these

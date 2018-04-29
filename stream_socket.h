@@ -4,7 +4,10 @@ char* get_hostname_from_arg(char* arg);
 
 int get_portno_from_arg(char* arg);
 
-int sendPacket(int socket, char* data, int data_len);
+int sendPacketTCP(int socket, char* data, int data_len);
 
-int receivePacket(int socket, char* data);
+int receivePacketTCP(int socket, char* data);
 
+int sendPacketUDP(int socket, char* data, int data_len);
+
+int receivePacketUDP(int socket, char* data);

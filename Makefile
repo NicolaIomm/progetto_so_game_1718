@@ -6,9 +6,8 @@ AR=ar
 BINS=libso_game.a\
      so_game\
    	 so_game_server\
-	 so_game_client\
+	   so_game_client\
      test_packets_serialization\
-
 
 OBJS = vec3.o\
        linked_list.o\
@@ -18,8 +17,7 @@ OBJS = vec3.o\
        world.o\
        world_viewer.o\
        so_game_protocol.o\
-       stream_socket.o\
-
+       stream_socket.o
 
 HEADERS=helpers.h\
 	image.h\
@@ -30,6 +28,7 @@ HEADERS=helpers.h\
 	vehicle.h\
 	world.h\
 	world_viewer.h\
+	world_viewer_client.h\
 	stream_socket.h
 
 %.o:	%.c $(HEADERS)
@@ -52,9 +51,7 @@ so_game_client: so_game_client.c libso_game.a
 so_game_server: so_game_server.c libso_game.a
 	$(CC) $(CCOPTS) -Ofast $^ -o $@  $(LIBS)
 
-
-
-test_packets_serialization: test_packets_serialization.c libso_game.a
+test_packets_serialization: test_packets_serialization.c
 	$(CC) $(CCOPTS) -Ofast -o $@ $^  $(LIBS)
 
 clean:
