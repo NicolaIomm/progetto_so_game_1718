@@ -26,7 +26,12 @@
 
 #define INCOMING_DATA_SIZE 1000000
 
-    // INFO: send your image profile and get (id, surface texture, elevation texture)
+  // Socket and server_addr (TCP or UDP)
+int sockfd;
+struct sockaddr_in server_addr;
+socklen_t server_len = sizeof(server_addr);
+
+    // buffer to comunicate with server (TCP or UDP)
 char data[INCOMING_DATA_SIZE];
 int data_len;
 
@@ -35,13 +40,12 @@ Vehicle* vehicle; // The vehicle
 
 void* update_handler_UDP(void* arg_null){
 
-  int sockfd;
   int repeat_flag = 1;  // Set to 0 when you don't want anymore to repeat
 
   while (repeat_flag){
 
         // Receive serialized WorldUpdatePacket containing all vehicle in the world
-      data_len = receivePacketUDP(sockfd, data);
+      data_len = receivePacketUDP(sockfd, data, (sockaddr *)&server_addr, &server_len);
         WorldUpdatePacket* world_update_packet = (WorldUpdatePacket*) Packet_deserialize(data, data_len);
         int n = world_update_packet->num_vehicles;
         ClientUpdate* updates_vec = world_update_packet->updates;
@@ -66,11 +70,11 @@ void* update_handler_UDP(void* arg_null){
 
             // Send serialized ImagePacket containing image profile
             data_len = Packet_serialize(data, &new_vehicle_texture->header);
-            sendPacketUDP(sockfd, data, data_len);
+            sendPacketUDP(sockfd, data, (sockaddr *)&server_addr, server_len);
             Packet_free((PacketHeader *) new_vehicle_texture);
 
             // Receive serialized ImagePacket containing the server copy of image profile
-            data_len = receivePacketUDP(sockfd, data);
+            data_len = receivePacketUDP(sockfd, data, (sockaddr *)&server_addr, &server_len);
                 ImagePacket* received_new_vehicle_texture = (ImagePacket*) Packet_deserialize(data, data_len);
                 vehicle_texture = received_new_vehicle_texture->image;
             Packet_free((PacketHeader *) received_new_vehicle_texture);
@@ -102,7 +106,7 @@ void* update_handler_UDP(void* arg_null){
 
             // Send VehicleUpdatePacket packet to UDP Server
       data_len = Packet_serialize(data, &my_vehicle_packet->header);
-      //sendPacketUDP(sockfd, data, data_len);
+      sendPacketUDP(sockfd, data, (sockaddr *)&server_addr, server_len);
       Packet_free((PacketHeader *) my_vehicle_packet);
   }
 
@@ -120,6 +124,7 @@ int main(int argc, char **argv) {
     // Casting arguments
   char* server_ip = get_hostname_from_arg(argv[1]);
   int server_port = get_portno_from_arg(argv[1]);
+
   char* player_texture_path = argv[2];
   if (server_ip == NULL || server_port == -1 )
     print_err("Error while reading input arguments. Check <Server_address>.\n");
@@ -147,9 +152,6 @@ int main(int argc, char **argv) {
     Image* my_texture_from_server;
 	Image* map_texture;
     Image* map_elevation;
-
-  int sockfd;
-  struct sockaddr_in server_addr = {0};
 
     // Create TCP Socket
   sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -275,12 +277,24 @@ int main(int argc, char **argv) {
     // Closing TCP socket
     ret = close(sockfd);
     if (ret < 0)
-        print_err("Error while closing socket\n");
+        print_err("Error while closing TCP socket\n");
 
 	printf("\t\t ***** Closing TCP Connection! *****\n\n");
 
     // construct the world
   World_init(&world, map_elevation, map_texture, 0.5, 0.5, 0.5);
+
+        // Initializing UDP connection (server_ip is the same and server_port is the next port of the TCP port)
+  sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+  server_port += 1;
+  server_addr = {0};
+
+  if (sockfd < 0)
+    print_err("Error while opening UDP socket\n");
+
+  server_addr.sin_addr.s_addr = inet_addr(server_ip);
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_port = htons(server_port);
 
     // construct and init my vehicle
   vehicle = (Vehicle*) malloc(sizeof(Vehicle));
@@ -294,7 +308,7 @@ int main(int argc, char **argv) {
   // request the texture and add the player to the pool
 
   pthread_t update_thread;
-  ret = pthread_create(&update_thread, NULL, update_handler_UDP, (void*)vehicle);
+  ret = pthread_create(&update_thread, NULL, update_handler_UDP, NULL);
   if (ret != 0)
     print_err("Cannot create the update_handler_UDP thread");
 

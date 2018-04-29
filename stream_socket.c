@@ -3,6 +3,8 @@
 #include <string.h>
 #include <errno.h>
 
+//#include <sys/types.h>
+//#include <sys/socket.h>
 #include <arpa/inet.h>  // hton() , inet_addr()
 
 #pragma GCC diagnostic ignored "-Wwrite-strings"
@@ -99,10 +101,18 @@ int receivePacketTCP(int socket, char* data){
 	return bytes_received;
 }
 
-int sendPacketUDP(int socket, char* data, int data_len){
-  return 0;
+int sendPacketUDP(int socket, char* data, struct sockaddr* server_addr, socklen_t server_len){
+  int bytes_sent = 0;
+
+  bytes_sent = sendto(socket, data, strlen(data), 0, server_addr, server_len);
+
+  return bytes_sent;
 }
 
-int receivePacketUDP(int socket, char* data){
-  return 0;
+int receivePacketUDP(int socket, char* data, struct sockaddr* server_addr, socklen_t* server_len){
+  int bytes_received = 0;
+
+  bytes_received = recvfrom(socket, data, strlen(data), 0, server_addr, server_len);
+
+  return bytes_received;
 }

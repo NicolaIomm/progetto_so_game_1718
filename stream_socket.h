@@ -8,6 +8,6 @@ int sendPacketTCP(int socket, char* data, int data_len);
 
 int receivePacketTCP(int socket, char* data);
 
-int sendPacketUDP(int socket, char* data, int data_len);
+int sendPacketUDP(int socket, char* data, struct sockaddr* server_addr, socklen_t server_len);
 
-int receivePacketUDP(int socket, char* data);
+int receivePacketUDP(int socket, char* data, struct sockaddr* server_addr, socklen_t* server_len);
