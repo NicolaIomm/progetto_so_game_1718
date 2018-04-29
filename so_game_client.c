@@ -42,7 +42,22 @@ void* update_handler_UDP(void* arg_null){
 
   int repeat_flag = 1;  // Set to 0 when you don't want anymore to repeat
 
+
   while (repeat_flag){
+
+        // Build VehicleUpdatePacket packet to send my vehicle
+      VehicleUpdatePacket* my_vehicle_packet = (VehicleUpdatePacket*) malloc(sizeof(VehicleUpdatePacket));
+              PacketHeader my_vehicle_packet_header;
+              my_vehicle_packet_header.type = VehicleUpdate;
+      my_vehicle_packet->header = my_vehicle_packet_header;
+      my_vehicle_packet->id = vehicle->id;
+      my_vehicle_packet->rotational_force = vehicle->rotational_force_update;
+      my_vehicle_packet->translational_force = vehicle->translational_force_update;
+
+            // Send VehicleUpdatePacket packet to UDP Server
+      data_len = Packet_serialize(data, &my_vehicle_packet->header);
+      sendPacketUDP(sockfd, data, (sockaddr *)&server_addr, server_len);
+      Packet_free((PacketHeader *) my_vehicle_packet);
 
         // Receive serialized WorldUpdatePacket containing all vehicle in the world
       data_len = receivePacketUDP(sockfd, data, (sockaddr *)&server_addr, &server_len);
@@ -94,20 +109,6 @@ void* update_handler_UDP(void* arg_null){
 
         // Update the world including all vehicles position
       World_update(&world);
-
-        // Build VehicleUpdatePacket packet to send my vehicle
-      VehicleUpdatePacket* my_vehicle_packet = (VehicleUpdatePacket*) malloc(sizeof(VehicleUpdatePacket));
-              PacketHeader my_vehicle_packet_header;
-              my_vehicle_packet_header.type = VehicleUpdate;
-      my_vehicle_packet->header = my_vehicle_packet_header;
-      my_vehicle_packet->id = vehicle->id;
-      my_vehicle_packet->rotational_force = vehicle->rotational_force_update;
-      my_vehicle_packet->translational_force = vehicle->translational_force_update;
-
-            // Send VehicleUpdatePacket packet to UDP Server
-      data_len = Packet_serialize(data, &my_vehicle_packet->header);
-      sendPacketUDP(sockfd, data, (sockaddr *)&server_addr, server_len);
-      Packet_free((PacketHeader *) my_vehicle_packet);
   }
 
   return NULL;
@@ -150,7 +151,7 @@ int main(int argc, char **argv) {
     // Connecting to server to exchange information
     int my_id;
     Image* my_texture_from_server;
-	Image* map_texture;
+    Image* map_texture;
     Image* map_elevation;
 
     // Create TCP Socket
@@ -212,7 +213,7 @@ int main(int argc, char **argv) {
 	Packet_free((PacketHeader *) received_profile_texture_packet);
 
 	printf("\t\t ***** Server agreed your profile texture! *****\n\n");
-/*
+
 		// Build ImagePacket asking texture_surface to server
 	ImagePacket* request_texture_surface = (ImagePacket*) malloc(sizeof(ImagePacket));
 		PacketHeader request_texture_surface_header;
@@ -258,21 +259,6 @@ int main(int argc, char **argv) {
 	Packet_free((PacketHeader *) texture_elevation_packet);
 
 	printf("\t\t ***** Texture elevation received succesfully from server! *****\n\n");
-*/
-
-    map_elevation = Image_load("./images/maze.pgm");
-    if (map_elevation) {
-    printf("Done! \n");
-    } else {
-    printf("Fail! \n");
-    }
-
-    map_texture = Image_load("./images/depth1.pgm");
-    if (map_texture) {
-    printf("Done! \n");
-    } else {
-    printf("Fail! \n");
-    }
 
     // Closing TCP socket
     ret = close(sockfd);
@@ -312,11 +298,16 @@ int main(int argc, char **argv) {
   if (ret != 0)
     print_err("Cannot create the update_handler_UDP thread");
 
-  printf("Started new update handler thread.\n");
+  printf("Started new update handler thread (UDP connection).\n");
 
   ret = pthread_detach(update_thread);
   if (ret != 0)
     print_err("Cannot detach the update_handler_UDP thread");
+
+  Image_save(map_texture, "text.pgm");
+  Image_save(map_elevation, "elev.pgm");
+
+  exit(0);
 
     // Start the world viewer from your vehicle point of view
   WorldViewer_runGlobal(&world, vehicle, &argc, argv);
