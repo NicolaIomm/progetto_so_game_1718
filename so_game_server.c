@@ -20,10 +20,14 @@
 #include <arpa/inet.h>  // htons()
 #include <netinet/in.h> // struct sockaddr_in
 #include <sys/socket.h>
+#include <sys/types.h>
+#include <netdb.h>
 
 #define DEBUG 1
 #define SERVER_PORT 3000
 #define INCOMING_DATA_SIZE 1000000
+
+int global_id=1;
 
 typedef struct thread_arg
 {
@@ -32,6 +36,10 @@ typedef struct thread_arg
  int socket;
 
 } Thread_arg;
+
+void* thread_handler_UDP(void* arg){
+    printf("Prova\n");
+}
 
 void* thread_handler_TCP(void* arg){
   Thread_arg* tr=(Thread_arg*)arg;
@@ -52,11 +60,12 @@ void* thread_handler_TCP(void* arg){
     if (id_received == -1){
             // Build IdPacket to ask an ID from Server
         IdPacket* request_id_packet = (IdPacket*)malloc(sizeof(IdPacket));
-          PacketHeader id_header;
-          id_header.type = GetId;
+        PacketHeader id_header;
+        id_header.type = GetId;
         request_id_packet->header = id_header;
-        request_id_packet->id = 22;
-
+        request_id_packet->id = global_id;
+        printf("Client connected with ID: %d\n",global_id);
+        global_id++;
         // Sent deserialized IdPacket
         data_len = Packet_serialize(data, &request_id_packet->header);
         sendPacket(socket_desc, data, data_len);
@@ -79,10 +88,10 @@ void* thread_handler_TCP(void* arg){
 
       // Resend the player's texture to client to confirm the texture
     ImagePacket* confirmed_player_texture = (ImagePacket*)malloc(sizeof(ImagePacket));
-      PacketHeader confirmed_player_texture_header;
-      confirmed_player_texture_header.type = PostTexture;
+    PacketHeader confirmed_player_texture_header;
+    confirmed_player_texture_header.type = PostTexture;
     confirmed_player_texture->header = confirmed_player_texture_header;
-    confirmed_player_texture->id = 22;
+    confirmed_player_texture->id = global_id;
     confirmed_player_texture->image = profile_texture_image;
 
     data_len = Packet_serialize(data, &confirmed_player_texture->header);
@@ -178,13 +187,44 @@ int main(int argc, char **argv) {
     starting server UDP
   */
 
+    int ret;
+    Thread_arg prova;
+
+
+  //prova UDP
+
+    int ds_sock;
+    struct sockaddr_in my_addr;
+    struct sockaddr addr;
+    int addrlen;
+    char buff[1024];
+
+    ds_sock=socket(AF_INET, SOCK_DGRAM,0);
+
+    my_addr.sin_family=AF_INET;
+    my_addr.sin_port=3001;
+    my_addr.sin_addr.s_addr=INADDR_ANY;
+
+    bind(ds_sock,(const sockaddr*)&my_addr,sizeof(my_addr));
+    if(recvfrom(ds_sock,buff,1024,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen)==-1){
+        printf("Error in recvfrom\n");
+        exit(1);
+    }
+
+    printf("OK\n");
+    pthread_t pp;
+    ret=pthread_create(&pp,NULL,thread_handler_UDP,(void*)&prova);
+    printf("Thread created (UDP)\n");
+
+    ret=pthread_detach(pp);
+    if(ret!=0)  print_err("Cannot detach");
   /*
     starting server TCP
   */
 
 
 
-  int ret;
+
 
   int socket_desc, client_desc;
 
@@ -244,7 +284,7 @@ int main(int argc, char **argv) {
       ret=pthread_create(&p,NULL,thread_handler_TCP,(void*)&st);
       if(ret!=0)  print_err("Cannot create the thread");
 
-      printf("Thread created\n");
+      printf("Thread created  (TCP)\n");
 
       ret=pthread_detach(p);
       if(ret!=0)  print_err("Cannot detach");
