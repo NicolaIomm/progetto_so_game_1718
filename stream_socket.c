@@ -10,6 +10,7 @@
 #pragma GCC diagnostic ignored "-Wwrite-strings"
 
 #define DEBUG 0
+#define INCOMING_DATA_SIZE 1000000
 
 void print_err(char* msg){
   fprintf(stderr, "%s\n", msg);
@@ -106,13 +107,23 @@ int sendPacketUDP(int socket, char* data, struct sockaddr* server_addr, socklen_
 
   bytes_sent = sendto(socket, data, strlen(data), 0, server_addr, server_len);
 
+  if (DEBUG){
+    printf("Data to send: %s\n", data);
+    printf("Data size: %lu\n", strlen(data));
+  }
+
   return bytes_sent;
 }
 
 int receivePacketUDP(int socket, char* data, struct sockaddr* server_addr, socklen_t* server_len){
   int bytes_received = 0;
 
-  bytes_received = recvfrom(socket, data, strlen(data), 0, server_addr, server_len);
+  bytes_received = recvfrom(socket, data, INCOMING_DATA_SIZE, 0, server_addr, server_len);
+
+  if (DEBUG){
+    printf("Data received: %s\n", data);
+    printf("Data size: %lu\n", strlen(data));
+  }
 
   return bytes_received;
 }

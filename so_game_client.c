@@ -42,6 +42,8 @@ void* update_handler_UDP(void* arg_null){
 
   int repeat_flag = 1;  // Set to 0 when you don't want anymore to repeat
 
+  int bytes_sent;
+  int bytes_received;
 
   while (repeat_flag){
 
@@ -300,12 +302,9 @@ int main(int argc, char **argv) {
 
   printf("Started new update handler thread (UDP connection).\n");
 
-  ret = pthread_detach(update_thread);
+  ret = pthread_join(update_thread, NULL);    // Change this to pthread_detach !!!!!!!!!!!!!!!!!!!!!!!!!
   if (ret != 0)
     print_err("Cannot detach the update_handler_UDP thread");
-
-  Image_save(map_texture, "text.pgm");
-  Image_save(map_elevation, "elev.pgm");
 
   exit(0);
 

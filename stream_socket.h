@@ -1,3 +1,4 @@
+
 void print_err(char* msg);
 
 char* get_hostname_from_arg(char* arg);
