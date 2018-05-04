@@ -19,34 +19,36 @@
 #include "surface.h"
 #include <stdlib.h>
 
+#define MULTIPLIER 0.5
+
 int window;
 
 WorldViewer viewer;
 
 void keyPressed(unsigned char key, int x, int y){
   switch(key){
-  case 27:
-    glutDestroyWindow(window);
-    exit(0);
-  case ' ':
-    viewer.self->translational_force_update = 0;
-    viewer.self->rotational_force_update = 0;
-    break;
-  case '+':
-    viewer.zoom *= 1.1f;
-    break;
-  case '-':
-    viewer.zoom /= 1.1f;
-    break;
-  case '1':
-    viewer.view_type = Inside;
-    break;
-  case '2':
-    viewer.view_type = Outside;
-    break;
-  case '3':
-    viewer.view_type = Global;
-    break;
+    case 27:
+      glutDestroyWindow(window);
+      exit(0);
+    case ' ':
+      viewer.self->translational_force_update = 0;
+      viewer.self->rotational_force_update = 0;
+      break;
+    case '+':
+      viewer.zoom *= 1.1f;
+      break;
+    case '-':
+      viewer.zoom /= 1.1f;
+      break;
+    case '1':
+      viewer.view_type = Inside;
+      break;
+    case '2':
+      viewer.view_type = Outside;
+      break;
+    case '3':
+      viewer.view_type = Global;
+      break;
   }
 }
 
@@ -54,22 +56,22 @@ void keyPressed(unsigned char key, int x, int y){
 void specialInput(int key, int x, int y) {
   switch(key){
   case GLUT_KEY_UP:
-    viewer.self->translational_force_update += 0.1;
+    viewer.self->translational_force_update += MULTIPLIER;
     break;
   case GLUT_KEY_DOWN:
-    viewer.self->translational_force_update -= 0.1;
+    viewer.self->translational_force_update -= MULTIPLIER;
     break;
   case GLUT_KEY_LEFT:
-    viewer.self->rotational_force_update += 0.1;
+    viewer.self->rotational_force_update += MULTIPLIER;
     break;
   case GLUT_KEY_RIGHT:
-    viewer.self->rotational_force_update -= 0.1;
+    viewer.self->rotational_force_update -= MULTIPLIER;
     break;
   case GLUT_KEY_PAGE_UP:
-    viewer.camera_z+=0.1;
+    viewer.camera_z+=MULTIPLIER;
     break;
   case GLUT_KEY_PAGE_DOWN:
-    viewer.camera_z-=0.1;
+    viewer.camera_z-=MULTIPLIER;
     break;
   }
 }

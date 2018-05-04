@@ -102,14 +102,14 @@ int receivePacketTCP(int socket, char* data){
 	return bytes_received;
 }
 
-int sendPacketUDP(int socket, char* data, struct sockaddr* server_addr, socklen_t server_len){
+int sendPacketUDP(int socket, char* data, int data_len, struct sockaddr* server_addr, socklen_t server_len){
   int bytes_sent = 0;
 
-  bytes_sent = sendto(socket, data, strlen(data), 0, server_addr, server_len);
+  bytes_sent = sendto(socket, data, data_len, 0, server_addr, server_len);
 
   if (DEBUG){
     printf("Data to send: %s\n", data);
-    printf("Data size: %lu\n", strlen(data));
+    printf("Data size: %d\n", bytes_sent);
   }
 
   return bytes_sent;
@@ -122,7 +122,7 @@ int receivePacketUDP(int socket, char* data, struct sockaddr* server_addr, sockl
 
   if (DEBUG){
     printf("Data received: %s\n", data);
-    printf("Data size: %lu\n", strlen(data));
+    printf("Data size: %d\n", bytes_received);
   }
 
   return bytes_received;

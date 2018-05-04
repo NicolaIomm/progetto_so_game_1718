@@ -24,54 +24,51 @@
 #include "so_game_protocol.h"
 #include "stream_socket.h"
 
-#define INCOMING_DATA_SIZE 1000000
+#define DEBUG 0
+
+#define TIME_TO_USLEEP 1000
+
+#define INCOMING_DATA_SIZE 5000000
 
   // Socket and server_addr (TCP or UDP)
 int sockfd;
 struct sockaddr_in server_addr;
 socklen_t server_len = sizeof(server_addr);
 
-    // buffer to comunicate with server (TCP or UDP)
-char data[INCOMING_DATA_SIZE];
-int data_len;
-
 World world;
 Vehicle* vehicle; // The vehicle
 
-void* update_handler_UDP(void* arg_null){
+Image* default_texture = Image_load("./images/test.ppm");
+
+void* listener_update_thread_handler_UDP(void* arg_null){
+
+  printf("Listener thread started.\n");
 
   int repeat_flag = 1;  // Set to 0 when you don't want anymore to repeat
 
+  char UDP_buff[INCOMING_DATA_SIZE];
+
+  int ret;
   int bytes_sent;
   int bytes_received;
 
   while (repeat_flag){
 
-        // Build VehicleUpdatePacket packet to send my vehicle
-      VehicleUpdatePacket* my_vehicle_packet = (VehicleUpdatePacket*) malloc(sizeof(VehicleUpdatePacket));
-              PacketHeader my_vehicle_packet_header;
-              my_vehicle_packet_header.type = VehicleUpdate;
-      my_vehicle_packet->header = my_vehicle_packet_header;
-      my_vehicle_packet->id = vehicle->id;
-      my_vehicle_packet->rotational_force = vehicle->rotational_force_update;
-      my_vehicle_packet->translational_force = vehicle->translational_force_update;
-
-            // Send VehicleUpdatePacket packet to UDP Server
-      data_len = Packet_serialize(data, &my_vehicle_packet->header);
-      sendPacketUDP(sockfd, data, (sockaddr *)&server_addr, server_len);
-      Packet_free((PacketHeader *) my_vehicle_packet);
-
         // Receive serialized WorldUpdatePacket containing all vehicle in the world
-      data_len = receivePacketUDP(sockfd, data, (sockaddr *)&server_addr, &server_len);
-        WorldUpdatePacket* world_update_packet = (WorldUpdatePacket*) Packet_deserialize(data, data_len);
+      bytes_received = receivePacketUDP(sockfd, UDP_buff, (sockaddr *)&server_addr, &server_len);
+        WorldUpdatePacket* world_update_packet = (WorldUpdatePacket*) Packet_deserialize(UDP_buff, bytes_received);
         int n = world_update_packet->num_vehicles;
         ClientUpdate* updates_vec = world_update_packet->updates;
       Packet_free((PacketHeader *) world_update_packet);
+
+      if (DEBUG)
+        printf("Pacchetto ricevuto con %d client_update !\n", n);
 
         // Update all vehicles in the world
       int i;
       for (i = 0; i < n; i++){
         int current_vehicle_id = updates_vec[i].id;
+          // Get Vehicle with id from my copy of world
         Vehicle* current_vehicle = World_getVehicle(&world, current_vehicle_id);
         if (current_vehicle == NULL){
             Vehicle* new_vehicle = (Vehicle*) malloc(sizeof(Vehicle));
@@ -86,33 +83,92 @@ void* update_handler_UDP(void* arg_null){
             new_vehicle_texture->image = NULL;
 
             // Send serialized ImagePacket containing image profile
-            data_len = Packet_serialize(data, &new_vehicle_texture->header);
-            sendPacketUDP(sockfd, data, (sockaddr *)&server_addr, server_len);
+            bzero(UDP_buff, bytes_received);
+            bytes_sent = Packet_serialize(UDP_buff, &new_vehicle_texture->header);
+            sendPacketUDP(sockfd, UDP_buff, bytes_sent, (sockaddr *)&server_addr, server_len);
             Packet_free((PacketHeader *) new_vehicle_texture);
 
             // Receive serialized ImagePacket containing the server copy of image profile
-            data_len = receivePacketUDP(sockfd, data, (sockaddr *)&server_addr, &server_len);
-                ImagePacket* received_new_vehicle_texture = (ImagePacket*) Packet_deserialize(data, data_len);
-                vehicle_texture = received_new_vehicle_texture->image;
+            bzero(UDP_buff, bytes_sent);
+            bytes_received = receivePacketUDP(sockfd, UDP_buff, (sockaddr *)&server_addr, &server_len);
+            ImagePacket* received_new_vehicle_texture = (ImagePacket*) Packet_deserialize(UDP_buff, bytes_received);
+
+            if (DEBUG){
+              printf("id: %d\n", received_new_vehicle_texture->id);
+              printf("image: %p\n", received_new_vehicle_texture->image);
+            }
+
+            vehicle_texture = received_new_vehicle_texture->image;
+
+            //Image_save(received_new_vehicle_texture->image, "inClient.pgm");
+
             Packet_free((PacketHeader *) received_new_vehicle_texture);
+
 
             Vehicle_init(new_vehicle, &world, current_vehicle_id, vehicle_texture);
 
             World_addVehicle(&world, new_vehicle);
-        }
-        else {
-          ClientUpdate* current_update = updates_vec+i;
-          current_vehicle->x = current_update->x;
-          current_vehicle->y = current_update->y;
-          current_vehicle->theta = current_update->theta;
+            current_vehicle = World_getVehicle(&world, current_vehicle_id);
         }
 
+        ClientUpdate* current_update = &updates_vec[i];
+        current_vehicle->x = current_update->x;
+        current_vehicle->y = current_update->y;
+        current_vehicle->theta = current_update->theta;
       }
 
         // Update the world including all vehicles position
       World_update(&world);
+
+      ret = usleep(TIME_TO_USLEEP);
+      if (ret < 0)
+        print_err("Impossible to sleep the listener_update_thread_handler_UDP.\n");
+
   }
 
+  return NULL;
+}
+
+void* sender_update_thread_handler_UDP(void* arg_null){
+
+  printf("Sender thread started.\n");
+
+  int repeat_flag = 1;  // Set to 0 when you don't want anymore to repeat
+
+  char UDP_buff[INCOMING_DATA_SIZE];
+
+  int ret;
+  int bytes_sent;
+
+  while (repeat_flag){
+
+        // Build VehicleUpdatePacket packet to send my vehicle
+      VehicleUpdatePacket* my_vehicle_packet = (VehicleUpdatePacket*) malloc(sizeof(VehicleUpdatePacket));
+              PacketHeader my_vehicle_packet_header;
+              my_vehicle_packet_header.type = VehicleUpdate;
+      my_vehicle_packet->header = my_vehicle_packet_header;
+      my_vehicle_packet->id = vehicle->id;
+      my_vehicle_packet->rotational_force = vehicle->rotational_force_update;
+      my_vehicle_packet->translational_force = vehicle->translational_force_update;
+
+            // Send VehicleUpdatePacket packet to UDP Server
+      bytes_sent = Packet_serialize(UDP_buff, &my_vehicle_packet->header);
+      sendPacketUDP(sockfd, UDP_buff, bytes_sent, (sockaddr *)&server_addr, server_len);
+
+      if (DEBUG){
+        printf("Pacchetto inviato al server\n");
+        printf("Rotational_force = %f\n", my_vehicle_packet->rotational_force);
+        printf("Translational_force = %f\n", my_vehicle_packet->translational_force);
+        printf("UDP_buff: %s\n", UDP_buff);
+      }
+
+      Packet_free((PacketHeader *) my_vehicle_packet);
+
+      ret = usleep(TIME_TO_USLEEP);
+      if (ret < 0)
+        print_err("Impossible to sleep the listener_update_thread_handler_UDP.\n");
+
+  }
   return NULL;
 }
 
@@ -121,6 +177,10 @@ int main(int argc, char **argv) {
     printf("Usage: %s <server_address> <player texture>\n", argv[0]);
     exit(-1);
   }
+
+    // buffer to comunicate with server (TCP or UDP)
+  char data[INCOMING_DATA_SIZE];
+  int data_len;
 
   int ret;
 
@@ -288,6 +348,8 @@ int main(int argc, char **argv) {
   vehicle = (Vehicle*) malloc(sizeof(Vehicle));
   Vehicle_init(vehicle, &world, my_id, my_texture_from_server);
 
+  World_addVehicle(&world, vehicle);
+
   // spawn a thread that will listen the update messages from
   // the server, and sends back the controls
   // the update for yourself are written in the desired_*_force
@@ -295,18 +357,26 @@ int main(int argc, char **argv) {
   // when the server notifies a new player has joined the game
   // request the texture and add the player to the pool
 
-  pthread_t update_thread;
-  ret = pthread_create(&update_thread, NULL, update_handler_UDP, NULL);
+
+  pthread_t listener_update_thread;
+  ret = pthread_create(&listener_update_thread, NULL, listener_update_thread_handler_UDP, NULL);
   if (ret != 0)
     print_err("Cannot create the update_handler_UDP thread");
+  printf("Started new listener_update_thread (UDP connection).\n");
 
-  printf("Started new update handler thread (UDP connection).\n");
-
-  ret = pthread_join(update_thread, NULL);    // Change this to pthread_detach !!!!!!!!!!!!!!!!!!!!!!!!!
+  ret = pthread_detach(listener_update_thread);
   if (ret != 0)
     print_err("Cannot detach the update_handler_UDP thread");
 
-  exit(0);
+  pthread_t sender_update_thread;
+  ret = pthread_create(&sender_update_thread, NULL, sender_update_thread_handler_UDP, NULL);
+  if (ret != 0)
+    print_err("Cannot create the update_handler_UDP thread");
+  printf("Started new sender_update_thread (UDP connection).\n");
+
+  ret = pthread_detach(sender_update_thread);
+  if (ret != 0)
+    print_err("Cannot detach the update_handler_UDP thread");
 
     // Start the world viewer from your vehicle point of view
   WorldViewer_runGlobal(&world, vehicle, &argc, argv);
