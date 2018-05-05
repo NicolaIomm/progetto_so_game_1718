@@ -54,77 +54,90 @@ void* listener_update_thread_handler_UDP(void* arg_null){
 
   while (repeat_flag){
 
-        // Receive serialized WorldUpdatePacket containing all vehicle in the world
+        // Receiving UDP Packet
       bytes_received = receivePacketUDP(sockfd, UDP_buff, (sockaddr *)&server_addr, &server_len);
-        WorldUpdatePacket* world_update_packet = (WorldUpdatePacket*) Packet_deserialize(UDP_buff, bytes_received);
-        int n = world_update_packet->num_vehicles;
-        ClientUpdate* updates_vec = world_update_packet->updates;
-      Packet_free((PacketHeader *) world_update_packet);
+      if (bytes_received < 0)
+        print_err("Error while receiving an UDP packet.");
 
-      if (DEBUG)
-        printf("Pacchetto ricevuto con %d client_update !\n", n);
+        // Determine the type of Packet
+      PacketHeader* general_packet = (PacketHeader*) Packet_deserialize(UDP_buff, bytes_received);
 
-        // Update all vehicles in the world
-      int i;
-      for (i = 0; i < n; i++){
-        int current_vehicle_id = updates_vec[i].id;
-          // Get Vehicle with id from my copy of world
-        Vehicle* current_vehicle = World_getVehicle(&world, current_vehicle_id);
-        if (current_vehicle == NULL){
-            Vehicle* new_vehicle = (Vehicle*) malloc(sizeof(Vehicle));
-            Image* vehicle_texture;
+      if (general_packet->type != 6)
+          printf("Altro pacchetto ricevuto.\n");
 
-                // Build ImagePacket to ask the vehicle texture with id = current_vehicle_id
-            ImagePacket* new_vehicle_texture = (ImagePacket*) malloc(sizeof(ImagePacket));
-                  PacketHeader new_vehicle_texture_header;
-                  new_vehicle_texture_header.type = GetTexture;
-            new_vehicle_texture->header = new_vehicle_texture_header;
-            new_vehicle_texture->id = current_vehicle_id;
-            new_vehicle_texture->image = NULL;
+      if (general_packet->type == PostTexture){
 
-            // Send serialized ImagePacket containing image profile
-            bzero(UDP_buff, bytes_received);
-            bytes_sent = Packet_serialize(UDP_buff, &new_vehicle_texture->header);
-            sendPacketUDP(sockfd, UDP_buff, bytes_sent, (sockaddr *)&server_addr, server_len);
-            Packet_free((PacketHeader *) new_vehicle_texture);
+        ImagePacket* received_new_vehicle_texture = (ImagePacket*) general_packet;
+        int id = received_new_vehicle_texture->id;
 
-            // Receive serialized ImagePacket containing the server copy of image profile
-            bzero(UDP_buff, bytes_sent);
-            bytes_received = receivePacketUDP(sockfd, UDP_buff, (sockaddr *)&server_addr, &server_len);
-            ImagePacket* received_new_vehicle_texture = (ImagePacket*) Packet_deserialize(UDP_buff, bytes_received);
-
-            if (DEBUG){
-              printf("id: %d\n", received_new_vehicle_texture->id);
-              printf("image: %p\n", received_new_vehicle_texture->image);
-            }
-
-            vehicle_texture = received_new_vehicle_texture->image;
-
-            //Image_save(received_new_vehicle_texture->image, "inClient.pgm");
-
-            Packet_free((PacketHeader *) received_new_vehicle_texture);
-
-
-            Vehicle_init(new_vehicle, &world, current_vehicle_id, vehicle_texture);
-
-            World_addVehicle(&world, new_vehicle);
-            current_vehicle = World_getVehicle(&world, current_vehicle_id);
+        if (1){
+          printf("id: %d\n", received_new_vehicle_texture->id);
+          printf("image: %p\n", received_new_vehicle_texture->image);
         }
 
-        ClientUpdate* current_update = &updates_vec[i];
-        current_vehicle->x = current_update->x;
-        current_vehicle->y = current_update->y;
-        current_vehicle->theta = current_update->theta;
-      }
+        Vehicle* target_vehicle = World_getVehicle(&world, id);
+        target_vehicle->texture = received_new_vehicle_texture->image;
 
-        // Update the world including all vehicles position
-      World_update(&world);
+        //Image_save(vehicle_texture, "inClient.pgm");
+
+        Packet_free((PacketHeader *) received_new_vehicle_texture);
+        bzero(UDP_buff, bytes_received);
+      }
+      else if (general_packet->type == WorldUpdate){
+
+        WorldUpdatePacket* world_update_packet = (WorldUpdatePacket*) general_packet;
+          int n = world_update_packet->num_vehicles;
+          ClientUpdate* updates_vec = world_update_packet->updates;
+        Packet_free((PacketHeader *) world_update_packet);
+        bzero(UDP_buff, bytes_received);
+
+        if (DEBUG)
+          printf("Pacchetto ricevuto con %d client_update !\n", n);
+
+          // Update all vehicles in the world
+        int i;
+        for (i = 0; i < n; i++){
+          int current_vehicle_id = updates_vec[i].id;
+            // Get Vehicle with id from my copy of world
+          Vehicle* current_vehicle = World_getVehicle(&world, current_vehicle_id);
+          if (current_vehicle == NULL){
+              Vehicle* new_vehicle = (Vehicle*) malloc(sizeof(Vehicle));
+
+                  // Build ImagePacket to ask the vehicle texture with id = current_vehicle_id
+              ImagePacket* new_vehicle_texture = (ImagePacket*) malloc(sizeof(ImagePacket));
+                    PacketHeader new_vehicle_texture_header;
+                    new_vehicle_texture_header.type = GetTexture;
+              new_vehicle_texture->header = new_vehicle_texture_header;
+              new_vehicle_texture->id = current_vehicle_id;
+              new_vehicle_texture->image = NULL;
+
+              // Send serialized ImagePacket containing image profile
+              bzero(UDP_buff, bytes_received);
+              bytes_sent = Packet_serialize(UDP_buff, &new_vehicle_texture->header);
+              sendPacketUDP(sockfd, UDP_buff, bytes_sent, (sockaddr *)&server_addr, server_len);
+              Packet_free((PacketHeader *) new_vehicle_texture);
+
+
+              Vehicle_init(new_vehicle, &world, current_vehicle_id, new_vehicle->texture);
+
+              World_addVehicle(&world, new_vehicle);
+              current_vehicle = World_getVehicle(&world, current_vehicle_id);
+          }
+
+          ClientUpdate* current_update = &updates_vec[i];
+          current_vehicle->x = current_update->x;
+          current_vehicle->y = current_update->y;
+          current_vehicle->theta = current_update->theta;
+        }
+
+          // Update the world including all vehicles position
+        World_update(&world);
+      }
 
       ret = usleep(TIME_TO_USLEEP);
       if (ret < 0)
         print_err("Impossible to sleep the listener_update_thread_handler_UDP.\n");
-
-  }
+    }
 
   return NULL;
 }
@@ -163,6 +176,7 @@ void* sender_update_thread_handler_UDP(void* arg_null){
       }
 
       Packet_free((PacketHeader *) my_vehicle_packet);
+      bzero(UDP_buff, bytes_sent);
 
       ret = usleep(TIME_TO_USLEEP);
       if (ret < 0)

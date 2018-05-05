@@ -65,11 +65,11 @@ void* listener_update_thread_handler_UDP(void* arg_null){
   printf("Listener thread started.\n");
 
   char UDP_buff[INCOMING_DATA_SIZE];
+  int ret;
+  int bytes_received;
+  int bytes_sent;
 
   while (1){
-    int ret;
-    int bytes_received;
-    int bytes_sent;
 
     socklen_t client_addr_len = sizeof(struct sockaddr);
     struct sockaddr* client_addr = (struct sockaddr*)malloc(client_addr_len);
@@ -87,8 +87,9 @@ void* listener_update_thread_handler_UDP(void* arg_null){
         ImagePacket* image_request = (ImagePacket*) general_packet;
         int id = image_request->id;
         Packet_free((PacketHeader*)image_request);
+        bzero(UDP_buff, bytes_received);
 
-        if (DEBUG){
+        if (1){
           printf("Un client ha richiesto la texture del veicolo %d\n", id);
         }
 
@@ -101,18 +102,17 @@ void* listener_update_thread_handler_UDP(void* arg_null){
           PacketHeader texture_header;
           texture_header.type = PostTexture;
         texture->header = texture_header;
-        texture->id = 0;
+        texture->id = id;
         texture->image = image;
 
         Image_save(image, "inServer.pgm");
 
           // Send texture for client
-        bzero(UDP_buff, bytes_received);
         bytes_sent = Packet_serialize(UDP_buff, &texture->header);
         sendPacketUDP(ds_sock, UDP_buff, bytes_sent, client_addr, client_addr_len);
 
         Packet_free((PacketHeader*)texture);
-
+        bzero(UDP_buff, bytes_sent);
     }
     else if (general_packet->type == VehicleUpdate){
         // Analyzing VehicleUpdatePacket
@@ -129,6 +129,7 @@ void* listener_update_thread_handler_UDP(void* arg_null){
       }
 
       Packet_free((PacketHeader*) vehicle_update);
+      bzero(UDP_buff, bytes_received);
 
         // NewClient detected
       ClientVehicle* new_client = (ClientVehicle*) malloc(sizeof(ClientVehicle));
@@ -166,13 +167,13 @@ void* listener_update_thread_handler_UDP(void* arg_null){
 
         // Update_world
       World_update(&world);
-
-        // Sleep the thread
-      ret = usleep(TIME_TO_USLEEP);
-      if (ret < 0)
-        print_err("Impossible to usleep listener_thread_handler_UDP.\n");
-
     }
+
+      // Sleep the thread
+    ret = usleep(TIME_TO_USLEEP);
+    if (ret < 0)
+      print_err("Impossible to usleep listener_thread_handler_UDP.\n");
+
   }
   return NULL;
 }
@@ -238,7 +239,7 @@ void* sender_update_thread_handler_UDP(void* arg_null){
     }
 
       // Clear UDP_buff
-    bzero(UDP_buff, INCOMING_DATA_SIZE);
+    bzero(UDP_buff, bytes_sent);
 
       // Sleep the thread
     ret = usleep(TIME_TO_USLEEP);
