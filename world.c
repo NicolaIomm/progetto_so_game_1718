@@ -46,7 +46,7 @@ int World_init(World* w,
   w->ground.texture=surface_texture;
   Image_free(float_image);
   w->dt = 1;
-  w->time_scale = 25; // 10
+  w->time_scale = 10;
   gettimeofday(&w->last_update, 0);
   return 1;
 }

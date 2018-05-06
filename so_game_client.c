@@ -26,9 +26,10 @@
 
 #define DEBUG 0
 
-#define TIME_TO_USLEEP 1000
+#define TIME_TO_USLEEP_SENDER   30000  // 30 ms
+#define TIME_TO_USLEEP_LISTENER  1000  //  1 ms
 
-#define INCOMING_DATA_SIZE 5000000
+#define INCOMING_DATA_SIZE 1000000
 
   // Socket and server_addr (TCP or UDP)
 int sockfd;
@@ -134,7 +135,7 @@ void* listener_update_thread_handler_UDP(void* arg_null){
         World_update(&world);
       }
 
-      ret = usleep(TIME_TO_USLEEP);
+      ret = usleep(TIME_TO_USLEEP_LISTENER);
       if (ret < 0)
         print_err("Impossible to sleep the listener_update_thread_handler_UDP.\n");
     }
@@ -157,8 +158,8 @@ void* sender_update_thread_handler_UDP(void* arg_null){
 
         // Build VehicleUpdatePacket packet to send my vehicle
       VehicleUpdatePacket* my_vehicle_packet = (VehicleUpdatePacket*) malloc(sizeof(VehicleUpdatePacket));
-              PacketHeader my_vehicle_packet_header;
-              my_vehicle_packet_header.type = VehicleUpdate;
+          PacketHeader my_vehicle_packet_header;
+          my_vehicle_packet_header.type = VehicleUpdate;
       my_vehicle_packet->header = my_vehicle_packet_header;
       my_vehicle_packet->id = vehicle->id;
       my_vehicle_packet->rotational_force = vehicle->rotational_force_update;
@@ -178,7 +179,7 @@ void* sender_update_thread_handler_UDP(void* arg_null){
       Packet_free((PacketHeader *) my_vehicle_packet);
       bzero(UDP_buff, bytes_sent);
 
-      ret = usleep(TIME_TO_USLEEP);
+      ret = usleep(TIME_TO_USLEEP_SENDER);
       if (ret < 0)
         print_err("Impossible to sleep the listener_update_thread_handler_UDP.\n");
 

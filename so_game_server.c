@@ -27,9 +27,10 @@
 #define SERVER_PORT_TCP 3000
 #define SERVER_PORT_UDP 3001
 
-#define TIME_TO_USLEEP 1000
+#define TIME_TO_USLEEP_SENDER   30000 // 30 ms
+#define TIME_TO_USLEEP_LISTENER  1000 //  1 ms
 
-#define INCOMING_DATA_SIZE 5000000
+#define INCOMING_DATA_SIZE 1000000
 
 int global_id=1;
 
@@ -170,7 +171,7 @@ void* listener_update_thread_handler_UDP(void* arg_null){
     }
 
       // Sleep the thread
-    ret = usleep(TIME_TO_USLEEP);
+    ret = usleep(TIME_TO_USLEEP_LISTENER);
     if (ret < 0)
       print_err("Impossible to usleep listener_thread_handler_UDP.\n");
 
@@ -242,7 +243,7 @@ void* sender_update_thread_handler_UDP(void* arg_null){
     bzero(UDP_buff, bytes_sent);
 
       // Sleep the thread
-    ret = usleep(TIME_TO_USLEEP);
+    ret = usleep(TIME_TO_USLEEP_SENDER);
     if (ret < 0)
       print_err("Impossible to usleep listener_thread_handler_UDP.\n");
   }
@@ -436,6 +437,7 @@ int main(int argc, char **argv) {
     if (ret != 0)
       print_err("Cannot detach");
 
+    /*
     pthread_t prova;
     ret = pthread_create(&prova, NULL, handler_di_prova, NULL);
     if (ret != 0)
@@ -444,7 +446,7 @@ int main(int argc, char **argv) {
     ret = pthread_detach(prova);
     if (ret != 0)
       print_err("Cannot detach");
-
+    */
   /*
     starting server TCP -> IT WORKS !
                           */
