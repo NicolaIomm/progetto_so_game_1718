@@ -29,7 +29,7 @@
 #define TIME_TO_USLEEP_SENDER   30000  // 30 ms
 #define TIME_TO_USLEEP_LISTENER  1000  //  1 ms
 
-#define INCOMING_DATA_SIZE 1000000
+#define INCOMING_DATA_SIZE 2000000
 
   // Socket and server_addr (TCP or UDP)
 int sockfd;
@@ -48,10 +48,11 @@ void* listener_update_thread_handler_UDP(void* arg_null){
   int repeat_flag = 1;  // Set to 0 when you don't want anymore to repeat
 
   char UDP_buff[INCOMING_DATA_SIZE];
+  bzero(UDP_buff, INCOMING_DATA_SIZE);
 
   int ret;
-  int bytes_sent;
   int bytes_received;
+  int bytes_sent;
 
   while (repeat_flag){
 
@@ -63,28 +64,7 @@ void* listener_update_thread_handler_UDP(void* arg_null){
         // Determine the type of Packet
       PacketHeader* general_packet = (PacketHeader*) Packet_deserialize(UDP_buff, bytes_received);
 
-      if (general_packet->type != 6)
-          printf("Altro pacchetto ricevuto.\n");
-
-      if (general_packet->type == PostTexture){
-
-        ImagePacket* received_new_vehicle_texture = (ImagePacket*) general_packet;
-        int id = received_new_vehicle_texture->id;
-
-        if (1){
-          printf("id: %d\n", received_new_vehicle_texture->id);
-          printf("image: %p\n", received_new_vehicle_texture->image);
-        }
-
-        Vehicle* target_vehicle = World_getVehicle(&world, id);
-        target_vehicle->texture = received_new_vehicle_texture->image;
-
-        //Image_save(vehicle_texture, "inClient.pgm");
-
-        Packet_free((PacketHeader *) received_new_vehicle_texture);
-        bzero(UDP_buff, bytes_received);
-      }
-      else if (general_packet->type == WorldUpdate){
+      if (general_packet->type == WorldUpdate){
 
         WorldUpdatePacket* world_update_packet = (WorldUpdatePacket*) general_packet;
           int n = world_update_packet->num_vehicles;
@@ -98,7 +78,8 @@ void* listener_update_thread_handler_UDP(void* arg_null){
           // Update all vehicles in the world
         int i;
         for (i = 0; i < n; i++){
-          int current_vehicle_id = updates_vec[i].id;
+            int current_vehicle_id = updates_vec[i].id;
+
             // Get Vehicle with id from my copy of world
           Vehicle* current_vehicle = World_getVehicle(&world, current_vehicle_id);
           if (current_vehicle == NULL){
@@ -118,7 +99,6 @@ void* listener_update_thread_handler_UDP(void* arg_null){
               sendPacketUDP(sockfd, UDP_buff, bytes_sent, (sockaddr *)&server_addr, server_len);
               Packet_free((PacketHeader *) new_vehicle_texture);
 
-
               Vehicle_init(new_vehicle, &world, current_vehicle_id, new_vehicle->texture);
 
               World_addVehicle(&world, new_vehicle);
@@ -133,8 +113,25 @@ void* listener_update_thread_handler_UDP(void* arg_null){
 
           // Update the world including all vehicles position
         World_update(&world);
-      }
+    }
+    else { // (general_packet->type == PostTexture)
 
+        ImagePacket* received_new_vehicle_texture = (ImagePacket*) general_packet;
+        int id = received_new_vehicle_texture->id;
+
+        if (1){
+          printf("id: %d\n", received_new_vehicle_texture->id);
+          printf("image: %p\n", received_new_vehicle_texture->image);
+        }
+
+        Vehicle* target_vehicle = World_getVehicle(&world, id);
+        target_vehicle->texture = received_new_vehicle_texture->image;
+
+        //Image_save(vehicle_texture, "inClient.pgm");
+
+        Packet_free((PacketHeader *) received_new_vehicle_texture);
+        bzero(UDP_buff, bytes_received);
+    }
       ret = usleep(TIME_TO_USLEEP_LISTENER);
       if (ret < 0)
         print_err("Impossible to sleep the listener_update_thread_handler_UDP.\n");

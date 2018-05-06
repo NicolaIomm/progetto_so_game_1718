@@ -30,7 +30,7 @@
 #define TIME_TO_USLEEP_SENDER   30000 // 30 ms
 #define TIME_TO_USLEEP_LISTENER  1000 //  1 ms
 
-#define INCOMING_DATA_SIZE 1000000
+#define INCOMING_DATA_SIZE 2000000
 
 int global_id=1;
 
@@ -66,6 +66,8 @@ void* listener_update_thread_handler_UDP(void* arg_null){
   printf("Listener thread started.\n");
 
   char UDP_buff[INCOMING_DATA_SIZE];
+  bzero(UDP_buff, INCOMING_DATA_SIZE);
+
   int ret;
   int bytes_received;
   int bytes_sent;
@@ -90,7 +92,7 @@ void* listener_update_thread_handler_UDP(void* arg_null){
         Packet_free((PacketHeader*)image_request);
         bzero(UDP_buff, bytes_received);
 
-        if (1){
+        if (DEBUG){
           printf("Un client ha richiesto la texture del veicolo %d\n", id);
         }
 
@@ -106,7 +108,8 @@ void* listener_update_thread_handler_UDP(void* arg_null){
         texture->id = id;
         texture->image = image;
 
-        Image_save(image, "inServer.pgm");
+        if (DEBUG)
+            Image_save(image, "inServer.pgm");
 
           // Send texture for client
         bytes_sent = Packet_serialize(UDP_buff, &texture->header);

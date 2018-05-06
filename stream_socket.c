@@ -118,7 +118,7 @@ int sendPacketUDP(int socket, char* data, int data_len, struct sockaddr* server_
 int receivePacketUDP(int socket, char* data, struct sockaddr* server_addr, socklen_t* server_len){
   int bytes_received = 0;
 
-  bytes_received = recvfrom(socket, data, INCOMING_DATA_SIZE, 0, server_addr, server_len);
+  bytes_received = recvfrom(socket, data, INCOMING_DATA_SIZE, MSG_WAITALL, server_addr, server_len);
 
   if (DEBUG){
     printf("Data received: %s\n", data);
