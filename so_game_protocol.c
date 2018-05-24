@@ -7,6 +7,7 @@
 int Packet_serialize(char* dest, const PacketHeader* h){
   char* dest_end=dest;
   switch(h->type){
+    case Disconnection:
     case GetId:
     case GetTexture:
     case GetElevation:
@@ -60,6 +61,7 @@ int Packet_serialize(char* dest, const PacketHeader* h){
 PacketHeader* Packet_deserialize(const char* buffer, int size){
   const PacketHeader* h=(PacketHeader*) buffer;
   switch(h->type) {
+    case Disconnection:
     case GetId:
     case GetTexture:
     case GetElevation:
@@ -105,6 +107,7 @@ PacketHeader* Packet_deserialize(const char* buffer, int size){
 
 void Packet_free(PacketHeader* h) {
   switch(h->type){
+  case Disconnection:
   case GetId:
   case GetTexture:
   case GetElevation:

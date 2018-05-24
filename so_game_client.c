@@ -24,28 +24,32 @@
 #include "so_game_protocol.h"
 #include "stream_socket.h"
 
+#include <sys/types.h>
+#include <signal.h>
+
 #define DEBUG 0
 
 #define TIME_TO_USLEEP_SENDER   30000  // 30 ms
-#define TIME_TO_USLEEP_LISTENER  1000  //  1 ms
 
 #define INCOMING_DATA_SIZE 2000000
 
-  // Socket and server_addr (TCP or UDP)
-int sockfd;
+void sighup_signal_handler(int signal);
+
+  // Socket (TCP)
+int sock_tcp;
+
+  // Socket and server_addr (UDP)
+int sock_udp;
 struct sockaddr_in server_addr;
 socklen_t server_len = sizeof(server_addr);
 
+  // Global variables for the game
 World world;
-Vehicle* vehicle; // The vehicle
-
-Image* default_texture = Image_load("./images/test.ppm");
+Vehicle* vehicle;
 
 void* listener_update_thread_handler_UDP(void* arg_null){
 
   printf("Listener thread started.\n");
-
-  int repeat_flag = 1;  // Set to 0 when you don't want anymore to repeat
 
   char UDP_buff[INCOMING_DATA_SIZE];
   bzero(UDP_buff, INCOMING_DATA_SIZE);
@@ -54,17 +58,31 @@ void* listener_update_thread_handler_UDP(void* arg_null){
   int bytes_received;
   int bytes_sent;
 
-  while (repeat_flag){
+  while (1){
 
         // Receiving UDP Packet
-      bytes_received = receivePacketUDP(sockfd, UDP_buff, (sockaddr *)&server_addr, &server_len);
+      bytes_received = receivePacketUDP(sock_udp, UDP_buff, (sockaddr *)&server_addr, &server_len);
       if (bytes_received < 0)
         print_err("Error while receiving an UDP packet.");
 
         // Determine the type of Packet
       PacketHeader* general_packet = (PacketHeader*) Packet_deserialize(UDP_buff, bytes_received);
 
-      if (general_packet->type == WorldUpdate){
+      if (DEBUG)
+        printf("Packet type: %d\nPacket size:%d\n\n", ((PacketHeader *) UDP_buff)->type, ((PacketHeader *) UDP_buff)->size);
+
+      if (general_packet->type == Disconnection){
+        IdPacket* disconnection = (IdPacket*) general_packet;
+        int target_id = disconnection->id;
+
+        Vehicle* target_vehicle = World_getVehicle(&world, target_id);
+
+        World_detachVehicle(&world, target_vehicle);
+        free(target_vehicle->texture);
+        free(target_vehicle);
+
+      }
+      else if (general_packet->type == WorldUpdate){
 
         WorldUpdatePacket* world_update_packet = (WorldUpdatePacket*) general_packet;
           int n = world_update_packet->num_vehicles;
@@ -80,15 +98,21 @@ void* listener_update_thread_handler_UDP(void* arg_null){
         for (i = 0; i < n; i++){
             int current_vehicle_id = updates_vec[i].id;
 
-            // Get Vehicle with id from my copy of world
-          Vehicle* current_vehicle = World_getVehicle(&world, current_vehicle_id);
-          if (current_vehicle == NULL){
-              Vehicle* new_vehicle = (Vehicle*) malloc(sizeof(Vehicle));
+            if (DEBUG && current_vehicle_id == vehicle->id)
+              continue;
+
+              // Get Vehicle with id from my copy of world
+            Vehicle* current_vehicle = World_getVehicle(&world, current_vehicle_id);
+            if (current_vehicle == NULL){
+                Vehicle* new_vehicle = (Vehicle*) malloc(sizeof(Vehicle));
+
+              if (DEBUG)
+                printf("Richiedo la texture per il veicolo %d\n", current_vehicle_id);
 
                   // Build ImagePacket to ask the vehicle texture with id = current_vehicle_id
               ImagePacket* new_vehicle_texture = (ImagePacket*) malloc(sizeof(ImagePacket));
-                    PacketHeader new_vehicle_texture_header;
-                    new_vehicle_texture_header.type = GetTexture;
+                PacketHeader new_vehicle_texture_header;
+                new_vehicle_texture_header.type = GetTexture;
               new_vehicle_texture->header = new_vehicle_texture_header;
               new_vehicle_texture->id = current_vehicle_id;
               new_vehicle_texture->image = NULL;
@@ -96,46 +120,55 @@ void* listener_update_thread_handler_UDP(void* arg_null){
               // Send serialized ImagePacket containing image profile
               bzero(UDP_buff, bytes_received);
               bytes_sent = Packet_serialize(UDP_buff, &new_vehicle_texture->header);
-              sendPacketUDP(sockfd, UDP_buff, bytes_sent, (sockaddr *)&server_addr, server_len);
+              sendPacketUDP(sock_udp, UDP_buff, bytes_sent, (sockaddr *)&server_addr, server_len);
               Packet_free((PacketHeader *) new_vehicle_texture);
 
-              Vehicle_init(new_vehicle, &world, current_vehicle_id, new_vehicle->texture);
+                // Wait until texture of the vehicle is loaded
+                // Receive serialized ImagePacket containing the new
+              bzero(UDP_buff, bytes_sent);
+              bytes_received = receivePacketTCP(sock_tcp, UDP_buff);
+
+              ImagePacket* received_texture = (ImagePacket*) Packet_deserialize(UDP_buff, bytes_received);
+              int id = received_texture->id;
+              Image* image = received_texture->image;
+
+              if (DEBUG)
+                printf("Ho ricevuto la texture del veicolo %d\n", id);
+
+              Packet_free((PacketHeader *) received_texture);
+
+              if (DEBUG)
+                printf("Packet type: %d\nPacket size:%d\n\n", ((PacketHeader *) UDP_buff)->type, ((PacketHeader *) UDP_buff)->size);
+
+              if (DEBUG){
+                char name[20];
+                printf("Ho ricevuto la texture del veicolo %d.\n", id);
+                sprintf(name, "inClient%d.pgm", id);
+                Image_save(image, name);
+              }
+
+              bzero(UDP_buff, bytes_received);
+
+              Vehicle_init(new_vehicle, &world, current_vehicle_id, image);
 
               World_addVehicle(&world, new_vehicle);
               current_vehicle = World_getVehicle(&world, current_vehicle_id);
-          }
+            }
+            else {
 
-          ClientUpdate* current_update = &updates_vec[i];
-          current_vehicle->x = current_update->x;
-          current_vehicle->y = current_update->y;
-          current_vehicle->theta = current_update->theta;
+              ClientUpdate* current_update = &updates_vec[i];
+              current_vehicle->x = current_update->x;
+              current_vehicle->y = current_update->y;
+              current_vehicle->theta = current_update->theta;
+            }
         }
 
-          // Update the world including all vehicles position
-        World_update(&world);
+        // Update the world including all vehicles position
+      World_update(&world);
     }
-    else { // (general_packet->type == PostTexture)
 
-        ImagePacket* received_new_vehicle_texture = (ImagePacket*) general_packet;
-        int id = received_new_vehicle_texture->id;
-
-        if (1){
-          printf("id: %d\n", received_new_vehicle_texture->id);
-          printf("image: %p\n", received_new_vehicle_texture->image);
-        }
-
-        Vehicle* target_vehicle = World_getVehicle(&world, id);
-        target_vehicle->texture = received_new_vehicle_texture->image;
-
-        //Image_save(vehicle_texture, "inClient.pgm");
-
-        Packet_free((PacketHeader *) received_new_vehicle_texture);
-        bzero(UDP_buff, bytes_received);
-    }
-      ret = usleep(TIME_TO_USLEEP_LISTENER);
-      if (ret < 0)
-        print_err("Impossible to sleep the listener_update_thread_handler_UDP.\n");
-    }
+    Packet_free((PacketHeader*) general_packet);
+  }
 
   return NULL;
 }
@@ -144,14 +177,12 @@ void* sender_update_thread_handler_UDP(void* arg_null){
 
   printf("Sender thread started.\n");
 
-  int repeat_flag = 1;  // Set to 0 when you don't want anymore to repeat
-
   char UDP_buff[INCOMING_DATA_SIZE];
 
   int ret;
   int bytes_sent;
 
-  while (repeat_flag){
+  while (1){
 
         // Build VehicleUpdatePacket packet to send my vehicle
       VehicleUpdatePacket* my_vehicle_packet = (VehicleUpdatePacket*) malloc(sizeof(VehicleUpdatePacket));
@@ -164,7 +195,7 @@ void* sender_update_thread_handler_UDP(void* arg_null){
 
             // Send VehicleUpdatePacket packet to UDP Server
       bytes_sent = Packet_serialize(UDP_buff, &my_vehicle_packet->header);
-      sendPacketUDP(sockfd, UDP_buff, bytes_sent, (sockaddr *)&server_addr, server_len);
+      sendPacketUDP(sock_udp, UDP_buff, bytes_sent, (sockaddr *)&server_addr, server_len);
 
       if (DEBUG){
         printf("Pacchetto inviato al server\n");
@@ -182,6 +213,41 @@ void* sender_update_thread_handler_UDP(void* arg_null){
 
   }
   return NULL;
+}
+
+void* texture_thread_handler(void* arg_null){
+
+  char data[INCOMING_DATA_SIZE];
+  int data_len;
+
+  int wait = 1;
+  while(wait){
+        // Receive serialized ImagePacket containing the new
+      data_len = receivePacketTCP(sock_tcp, data);
+
+      ImagePacket* received_texture = (ImagePacket*) Packet_deserialize(data, data_len);
+      int id = received_texture->id;
+      Image* image = received_texture->image;
+
+      Vehicle* target_vehicle = World_getVehicle(&world, id);
+      target_vehicle->texture = image;
+
+      Packet_free((PacketHeader *) received_texture);
+
+      if (DEBUG)
+        printf("Packet type: %d\nPacket size:%d\n\n", ((PacketHeader *) data)->type, ((PacketHeader *) data)->size);
+
+      if (DEBUG){
+        char name[20];
+        sprintf(name, "inClient%d.pgm", id);
+        Image_save(image, name);
+      }
+
+      bzero(data, data_len);
+
+      // Wait 1 sec
+    usleep(1000000);
+  }
 }
 
 int main(int argc, char **argv) {
@@ -222,15 +288,15 @@ int main(int argc, char **argv) {
     printf("Fail! *****\n\n");
   }
 
-    // Connecting to server to exchange information
-    int my_id;
-    Image* my_texture_from_server;
-    Image* map_texture;
-    Image* map_elevation;
+  // Connecting to server to exchange information
+  int my_id;
+  Image* my_texture_from_server;
+  Image* map_texture;
+  Image* map_elevation;
 
     // Create TCP Socket
-  sockfd = socket(AF_INET, SOCK_STREAM, 0);
-  if (sockfd < 0)
+  sock_tcp = socket(AF_INET, SOCK_STREAM, 0);
+  if (sock_tcp < 0)
     print_err("Error while opening socket\n");
 
     // Setting server address
@@ -239,7 +305,7 @@ int main(int argc, char **argv) {
   server_addr.sin_port        = htons(server_port); // don't forget about network byte order!
 
     // Connecting to server_addr
-  if (connect(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0)
+  if (connect(sock_tcp, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0)
     print_err("Error while connecting to server\n");
 
     // Build IdPacket to ask an ID from Server
@@ -251,13 +317,13 @@ int main(int argc, char **argv) {
 
     // Send deserialized IdPacket
 	data_len = Packet_serialize(data, &request_id_packet->header);
-	sendPacketTCP(sockfd, data, data_len);
+	sendPacketTCP(sock_tcp, data, data_len);
 	Packet_free((PacketHeader *) request_id_packet);
 
 	printf("Asking for an ID to server...\n");
 
     // Receive serialized IdPacket containing my new ID
-	data_len = receivePacketTCP(sockfd, data);
+	data_len = receivePacketTCP(sock_tcp, data);
 
   IdPacket* received_id_packet = (IdPacket*) Packet_deserialize(data, data_len);
   my_id = received_id_packet->id;
@@ -275,13 +341,13 @@ int main(int argc, char **argv) {
 
     // Send serialized ImagePacket containing image profile
   data_len = Packet_serialize(data, &profile_texture_packet->header);
-  sendPacketTCP(sockfd, data, data_len);
+  sendPacketTCP(sock_tcp, data, data_len);
   Packet_free((PacketHeader *) profile_texture_packet);
 
 	printf("Your profile texture has been sent to server. Waiting for agreement..\n");
 
     // Receive serialized ImagePacket containing the server copy of image profile
-	data_len = receivePacketTCP(sockfd, data);
+	data_len = receivePacketTCP(sock_tcp, data);
   ImagePacket* received_profile_texture_packet = (ImagePacket*) Packet_deserialize(data, data_len);
   my_texture_from_server = received_profile_texture_packet->image;
 	Packet_free((PacketHeader *) received_profile_texture_packet);
@@ -298,13 +364,13 @@ int main(int argc, char **argv) {
 
     // Send serialized ImagePacket containing the request for texture_surface
   data_len = Packet_serialize(data, &request_texture_surface->header);
-  sendPacketTCP(sockfd, data, data_len);
+  sendPacketTCP(sock_tcp, data, data_len);
   Packet_free((PacketHeader *) request_texture_surface);
 
 	printf("Asking for the texture_surface to server...\n");
 
     // Receive serialized ImagePacket containing the texture_surface
-	data_len = receivePacketTCP(sockfd, data);
+	data_len = receivePacketTCP(sock_tcp, data);
   ImagePacket* texture_surface_packet = (ImagePacket*) Packet_deserialize(data, data_len);
   map_texture = texture_surface_packet->image;
 	Packet_free((PacketHeader *) texture_surface_packet);
@@ -321,35 +387,28 @@ int main(int argc, char **argv) {
 
     // Send serialized ImagePacket containing the request for texture_elevation
   data_len = Packet_serialize(data, &request_texture_elevation->header);
-  sendPacketTCP(sockfd, data, data_len);
+  sendPacketTCP(sock_tcp, data, data_len);
   Packet_free((PacketHeader *) request_texture_elevation);
 
 	printf("Asking for the texture_elevation to server...\n");
 
     // Receive serialized ImagePacket containing the texture_elevation
-	data_len = receivePacketTCP(sockfd, data);
+	data_len = receivePacketTCP(sock_tcp, data);
         ImagePacket* texture_elevation_packet = (ImagePacket*) Packet_deserialize(data, data_len);
         map_elevation = texture_elevation_packet->image;
 	Packet_free((PacketHeader *) texture_elevation_packet);
 
 	printf("\t\t ***** Texture elevation received succesfully from server! *****\n\n");
 
-    // Closing TCP socket
-    ret = close(sockfd);
-    if (ret < 0)
-        print_err("Error while closing TCP socket\n");
-
-	printf("\t\t ***** Closing TCP Connection! *****\n\n");
-
     // construct the world
   World_init(&world, map_elevation, map_texture, 0.5, 0.5, 0.5);
 
         // Initializing UDP connection (server_ip is the same and server_port is the next port of the TCP port)
-  sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+  sock_udp = socket(AF_INET, SOCK_DGRAM, 0);
   server_port += 1;
   server_addr = {0};
 
-  if (sockfd < 0)
+  if (sock_udp < 0)
     print_err("Error while opening UDP socket\n");
 
   server_addr.sin_addr.s_addr = inet_addr(server_ip);
@@ -368,7 +427,6 @@ int main(int argc, char **argv) {
   // fields of the vehicle variable
   // when the server notifies a new player has joined the game
   // request the texture and add the player to the pool
-
 
   pthread_t listener_update_thread;
   ret = pthread_create(&listener_update_thread, NULL, listener_update_thread_handler_UDP, NULL);
@@ -390,10 +448,61 @@ int main(int argc, char **argv) {
   if (ret != 0)
     print_err("Cannot detach the update_handler_UDP thread");
 
+    // Set up sighup handler
+  struct sigaction sa;
+  memset(&sa, 0, sizeof(struct sigaction));
+    sa.sa_handler = sighup_signal_handler;
+
+  ret = sigaction(SIGHUP, &sa, NULL);
+  if (ret == -1)
+    print_err("Cannot set up SIGUP signal handler\n");
+
+  if (DEBUG)
+    printf("Signal handler installed successfully\n");
+
     // Start the world viewer from your vehicle point of view
   WorldViewer_runGlobal(&world, vehicle, &argc, argv);
 
-  // cleanup
-  World_destroy(&world);
   return 0;
+}
+
+void sighup_signal_handler(int signal){
+
+  int ret;
+  int buff_size = 100;
+  char* tmp_buff = (char*) malloc(buff_size);
+  int bytes_sent;
+
+    // Closing TCP socket
+  ret = close(sock_tcp);
+  if (ret < 0)
+    print_err("Error while closing TCP socket\n");
+
+	printf("\t\t ***** Closed TCP Connection! *****\n\n");
+
+    // Sending the DisconnectionPacket to server
+  IdPacket* disconnection = (IdPacket*) malloc(sizeof(IdPacket));
+		  PacketHeader disconnection_header;
+		  disconnection_header.type = Disconnection;
+  disconnection->header = disconnection_header;
+  disconnection->id = vehicle->id;
+
+  bzero(tmp_buff, buff_size);
+  bytes_sent = Packet_serialize(tmp_buff, &disconnection->header);
+  sendPacketUDP(sock_udp, tmp_buff, bytes_sent, (sockaddr *)&server_addr, server_len);
+
+  if (DEBUG)
+    printf("Packet type: %d\nPacket size:%d\n\n", ((PacketHeader *) tmp_buff)->type, ((PacketHeader *) tmp_buff)->size);
+
+  Packet_free((PacketHeader *) disconnection);
+
+  free(tmp_buff);
+
+    // Destroy the world
+  World_destroy(&world);
+
+	printf("\t\t ***** BYE BYE! *****\n\n");
+
+  exit(0);
+
 }

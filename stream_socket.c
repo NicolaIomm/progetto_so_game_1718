@@ -3,6 +3,8 @@
 #include <string.h>
 #include <errno.h>
 
+#include "so_game_protocol.h"
+
 //#include <sys/types.h>
 //#include <sys/socket.h>
 #include <arpa/inet.h>  // hton() , inet_addr()
@@ -31,22 +33,6 @@ int get_portno_from_arg(char* arg){
 int sendPacketTCP(int socket, char* data, int data_len){
 	int ret;
 	int bytes_sent;
-	uint32_t size = htonl(data_len);
-
-	bytes_sent = 0;
-	while (bytes_sent < sizeof(uint32_t)){
-		ret = send(socket, (char*)(&size)+bytes_sent, sizeof(uint32_t)-bytes_sent, 0);
-		if (ret == -1 && errno == EINTR)
-			continue;
-		if (ret < 0)
-			print_err("Error while writing on socket.");
-		bytes_sent += ret;
-	}
-
-    if (DEBUG){
-        printf("Stream_Socket:\n");
-        printf("\tData size: %d\n", data_len);
-    }
 
 	bytes_sent = 0;
 	while (bytes_sent < data_len){
@@ -58,8 +44,11 @@ int sendPacketTCP(int socket, char* data, int data_len){
 		bytes_sent += ret;
 	}
 
-    if (DEBUG)
-        printf("\tData sent: %d\n", bytes_sent);
+  if (DEBUG){
+      printf("Stream_Socket:\n");
+      printf("\tData size: %d\n", data_len);
+      printf("\tData sent: %d\n", bytes_sent);
+}
 
 	return bytes_sent;
 }
@@ -67,11 +56,12 @@ int sendPacketTCP(int socket, char* data, int data_len){
 int receivePacketTCP(int socket, char* data){
 	int ret;
 	int bytes_received;
-	uint32_t size;
+	int header_size = sizeof(PacketHeader);
+  int body_size;
 
 	bytes_received = 0;
-	while (bytes_received < sizeof(uint32_t)){
-		ret = recv(socket, (char*)(&size)+bytes_received, sizeof(uint32_t)-bytes_received, 0);
+	while (bytes_received < header_size){
+		ret = recv(socket, data+bytes_received, header_size-bytes_received, 0);
 		if (ret == -1 && errno == EINTR)
 			continue;
 		if (ret < 0)
@@ -79,16 +69,11 @@ int receivePacketTCP(int socket, char* data){
 		bytes_received += ret;
 	}
 
-	int data_len = ntohl(size);
-
-    if (DEBUG){
-        printf("Stream_Socket:\n");
-        printf("\tData size: %d\n", data_len);
-    }
+  body_size = (((PacketHeader*)data)->size - header_size);
 
 	bytes_received = 0;
-	while (bytes_received < data_len){
-		ret = recv(socket, data+bytes_received, data_len-bytes_received, 0);
+	while (bytes_received < body_size){
+		ret = recv(socket, data+header_size+bytes_received, body_size-bytes_received, 0);
 		if (ret == -1 && errno == EINTR)
 			continue;
 		if (ret < 0)
@@ -96,8 +81,12 @@ int receivePacketTCP(int socket, char* data){
 		bytes_received += ret;
 	}
 
-    if (DEBUG)
-        printf("\tData received: %d\n", bytes_received);
+  if (DEBUG){
+      printf("Stream_Socket:\n");
+      printf("\tData size: %d\n", header_size + body_size);
+      printf("\tData received: %d\n", bytes_received);
+  }
+
 
 	return bytes_received;
 }

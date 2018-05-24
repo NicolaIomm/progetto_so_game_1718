@@ -19,6 +19,11 @@
 #include "surface.h"
 #include <stdlib.h>
 
+  // Just to configure the behaviour when ESC button is pressed
+#include <sys/types.h>
+#include <signal.h>
+#include <unistd.h>
+
 #define MULTIPLIER 0.5
 
 int window;
@@ -27,9 +32,12 @@ WorldViewer viewer;
 
 void keyPressed(unsigned char key, int x, int y){
   switch(key){
-    case 27:
-      glutDestroyWindow(window);
-      exit(0);
+    case 27: // ESC button
+      if (kill(getpid(), SIGHUP) == -1){
+        printf("Error in closing the game.\n");
+        glutDestroyWindow(window);
+      }
+      break;
     case ' ':
       viewer.self->translational_force_update = 0;
       viewer.self->rotational_force_update = 0;
@@ -363,6 +371,7 @@ void WorldViewer_draw(WorldViewer* viewer){
 }
 
 void WorldViewer_destroy(WorldViewer* viewer){
+
 }
 
 void WorldViewer_reshapeViewport(WorldViewer* viewer, int width, int height){
@@ -370,7 +379,6 @@ void WorldViewer_reshapeViewport(WorldViewer* viewer, int width, int height){
   viewer->window_height = height;
   glViewport(0, 0, width, height);
 }
-
 
 void WorldViewer_run(WorldViewer* viewer,
 		     World* world,

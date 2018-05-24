@@ -28,13 +28,12 @@
 #define SERVER_PORT_UDP 3001
 
 #define TIME_TO_USLEEP_SENDER   30000 // 30 ms
-#define TIME_TO_USLEEP_LISTENER  1000 //  1 ms
 
 #define INCOMING_DATA_SIZE 2000000
 
 int global_id=1;
 
-int ds_sock;                // UDP info
+int sock_udp;                // UDP info
 struct sockaddr_in my_addr = {0};
 
 World world;
@@ -45,20 +44,18 @@ typedef struct ClientVehicle{
   ListItem list;
   int id;
   struct sockaddr* ip;
-  Image* texture;
+  int sock_tcp;
 } ClientVehicle;
 
-void* handler_di_prova(void* arg_null){
+/*
+void* prova_func(void* arg_null){
 
   while (1){
-
-    //printf("-> Veicoli attualmente connessi: %d\n", client_list.size);
-
-    usleep(1000000);
+    printf("\t--> Client connessi: %d\n", client_list.size);
+    usleep(2000000);
   }
-
-  return NULL;
 }
+*/
 
 void* listener_update_thread_handler_UDP(void* arg_null){
   // This thread will handle all incoming UDP connection coming from client
@@ -76,46 +73,108 @@ void* listener_update_thread_handler_UDP(void* arg_null){
 
     socklen_t client_addr_len = sizeof(struct sockaddr);
     struct sockaddr* client_addr = (struct sockaddr*)malloc(client_addr_len);
-    bzero(client_addr, client_addr_len);
 
       // Receiving UDP Packet
-    bytes_received = receivePacketUDP(ds_sock, UDP_buff, client_addr, &client_addr_len);
+    bytes_received = receivePacketUDP(sock_udp, UDP_buff, client_addr, &client_addr_len);
     if (bytes_received < 0)
       print_err("Error while receiving an UDP packet.");
 
       // Determine the type of Packet
     PacketHeader* general_packet = (PacketHeader*) Packet_deserialize(UDP_buff, bytes_received);
 
-    if (general_packet->type == GetTexture){
+    if (general_packet->type == Disconnection){
+      IdPacket* disconnection = (IdPacket*) general_packet;
+      int target_id = disconnection->id;
+
+      if (DEBUG)
+        printf("Packet type: %d\nPacket size:%d\n\n", ((PacketHeader *) UDP_buff)->type, ((PacketHeader *) UDP_buff)->size);
+
+        // Build IdPacket to notify the disconnection of client id
+      IdPacket* notify_disconnection = (IdPacket*) malloc(sizeof(IdPacket));
+        PacketHeader notify_disconnection_header;
+        notify_disconnection_header.type = Disconnection;
+      notify_disconnection->header = notify_disconnection_header;
+      notify_disconnection->id = target_id;
+
+      bytes_sent = Packet_serialize(UDP_buff, &notify_disconnection->header);
+      ListItem* iterator;
+
+        // Remove ClientVehicle from the ClientList
+      ListItem* target_client = NULL;
+      iterator = client_list.first;
+        while (iterator != NULL && target_client == NULL){
+          ClientVehicle* current = (ClientVehicle*) iterator;
+          if (current->id == target_id){
+            target_client = iterator;
+          }
+          iterator = iterator->next;
+        }
+
+      List_detach(&client_list, target_client);
+      free(((ClientVehicle*)target_client)->ip);
+      close(((ClientVehicle*)target_client)->sock_tcp);
+      free(((ClientVehicle*)target_client));
+
+        // Send disconnectionPacket to all clients in ClientList
+      iterator = client_list.first;
+      while (iterator != NULL){
+        ClientVehicle* current = (ClientVehicle*) iterator;
+        sendPacketUDP(sock_udp, UDP_buff, bytes_sent, current->ip, client_addr_len);
+        iterator = iterator->next;
+      }
+
+      Packet_free((PacketHeader *) notify_disconnection);
+
+      bzero(UDP_buff, bytes_received);
+
+        // Remove target Vehicle from the world
+      Vehicle* target_vehicle = World_getVehicle(&world, target_id);
+      World_detachVehicle(&world, target_vehicle);
+
+      printf("*** Veicolo %d disconnesso.\n", target_vehicle->id);
+
+      //Image_free(target_vehicle->texture); //DO NOT INCLUDE THIS
+      Vehicle_destroy(target_vehicle);
+
+    }
+    else if (general_packet->type == GetTexture){
         ImagePacket* image_request = (ImagePacket*) general_packet;
         int id = image_request->id;
-        Packet_free((PacketHeader*)image_request);
-        bzero(UDP_buff, bytes_received);
 
         if (DEBUG){
           printf("Un client ha richiesto la texture del veicolo %d\n", id);
         }
 
-          // Getting the texture requested (of id vehicle)
-        Vehicle* target_vehicle = World_getVehicle(&world, id);
-        Image* image = target_vehicle->texture;
+        ListItem* iterator = client_list.first;
+        while (iterator != NULL){
+          ClientVehicle* current = (ClientVehicle*) iterator;
+          if (memcmp(current->ip, client_addr, client_addr_len) == 0) {
 
-          // Build ImagePacket to send
-        ImagePacket* texture = (ImagePacket*) malloc(sizeof(ImagePacket));
-          PacketHeader texture_header;
-          texture_header.type = PostTexture;
-        texture->header = texture_header;
-        texture->id = id;
-        texture->image = image;
+            int target_socket = current->sock_tcp;
+            Vehicle* target_vehicle = World_getVehicle(&world, id);
+            Image* target_texture = target_vehicle->texture;
 
-        if (DEBUG)
-            Image_save(image, "inServer.pgm");
+              // Build ImagePacket to send the texture to client
+            ImagePacket* texture = (ImagePacket*) malloc(sizeof(ImagePacket));
+              PacketHeader texture_header;
+              texture_header.type = PostTexture;
+            texture->header = texture_header;
+            texture->id = id;
+            texture->image = target_texture;
 
-          // Send texture for client
-        bytes_sent = Packet_serialize(UDP_buff, &texture->header);
-        sendPacketUDP(ds_sock, UDP_buff, bytes_sent, client_addr, client_addr_len);
+              // Send deserialized ImagePacket
+            bzero(UDP_buff, bytes_received);
+            bytes_sent = Packet_serialize(UDP_buff, &texture->header);
+            sendPacketTCP(target_socket, UDP_buff, bytes_sent);
+            Packet_free((PacketHeader *) texture);
 
-        Packet_free((PacketHeader*)texture);
+            if (DEBUG)
+              printf("Sent to sock: %d\nPacket type: %d\nPacket size:%d\n\n", target_socket, ((PacketHeader *) UDP_buff)->type, ((PacketHeader *) UDP_buff)->size);
+
+            break;
+          }
+          iterator = iterator->next;
+        }
         bzero(UDP_buff, bytes_sent);
     }
     else if (general_packet->type == VehicleUpdate){
@@ -132,38 +191,23 @@ void* listener_update_thread_handler_UDP(void* arg_null){
         printf("UDP_buff: %s\n", UDP_buff);
       }
 
-      Packet_free((PacketHeader*) vehicle_update);
       bzero(UDP_buff, bytes_received);
 
-        // NewClient detected
-      ClientVehicle* new_client = (ClientVehicle*) malloc(sizeof(ClientVehicle));
-      new_client->id = id;
-      new_client->ip = client_addr;
-
-        // Store in client_list if is a new client
+        // Store address_ip (for UDP) in client_list if there isn't
       ListItem* iterator = client_list.first;
       int thereIs = 0;
       while (iterator != NULL){
         ClientVehicle* client_vehicle = (ClientVehicle*) iterator;
-        if (client_vehicle->id == new_client->id)
-          thereIs = 1;
+        if (client_vehicle->id == id && client_vehicle->ip == NULL)
+          client_vehicle->ip = client_addr;
         iterator = iterator->next;
-      }
-      if (!thereIs){
-        List_insert(&client_list, client_list.last, (ListItem*)new_client);
-        printf("Actual clients: %d\n",client_list.size);
-        if (DEBUG)
-          printf("*** Veicolo %d aggiunto alla lista.\n", new_client->id);
-      }
-      else{
-        free(client_addr);
-        free(new_client);
       }
 
         // Update vehicle
       Vehicle* current_vehicle = World_getVehicle(&world, id);
       if (current_vehicle == NULL){
-        printf("ERROR: Veicolo ID:%d non presente nel mondo !!!\n", id);
+        if (DEBUG)
+          printf("ERROR: Veicolo ID:%d non presente nel mondo !!!\n", id);
         continue;
       }
       current_vehicle->rotational_force_update = rotational_force;
@@ -173,10 +217,7 @@ void* listener_update_thread_handler_UDP(void* arg_null){
       World_update(&world);
     }
 
-      // Sleep the thread
-    ret = usleep(TIME_TO_USLEEP_LISTENER);
-    if (ret < 0)
-      print_err("Impossible to usleep listener_thread_handler_UDP.\n");
+    Packet_free((PacketHeader*) general_packet);
 
   }
   return NULL;
@@ -230,7 +271,10 @@ void* sender_update_thread_handler_UDP(void* arg_null){
     worldUpdatePacket->updates = updates;
 
       // Serialize WorldPacketUpdate
-    bytes_sent = Packet_serialize(UDP_buff, &worldUpdatePacket->header);
+    bytes_sent = Packet_serialize(UDP_buff, &(worldUpdatePacket->header));
+
+    if (DEBUG)
+      printf("Packet type: %d\nPacket size:%d\n\n", ((PacketHeader *) UDP_buff)->type, ((PacketHeader *) UDP_buff)->size);
 
       // Iterate on all ClientVehicle connected
     iterator = client_list.first;
@@ -238,7 +282,7 @@ void* sender_update_thread_handler_UDP(void* arg_null){
 
       ClientVehicle* client_vehicle = (ClientVehicle*)iterator;
         // Send WorldUpdatePacket just serialized in UDP_buff to them
-      sendPacketUDP(ds_sock, UDP_buff, bytes_sent, client_vehicle->ip, (socklen_t)sizeof(struct sockaddr_in));
+      sendPacketUDP(sock_udp, UDP_buff, bytes_sent, client_vehicle->ip, (socklen_t)sizeof(struct sockaddr_in));
       iterator = iterator->next;
     }
 
@@ -273,7 +317,8 @@ void* thread_handler_TCP(void* arg){
     data_len = receivePacketTCP(socket_desc, data);
     IdPacket* received_id_packet = (IdPacket*) Packet_deserialize(data, data_len);
 
-    // printf("Received requestIDPacket\n");
+    if (DEBUG)
+      printf("Received requestIDPacket\n");
 
     int id_received = received_id_packet->id;
     int id_assigned;
@@ -285,7 +330,6 @@ void* thread_handler_TCP(void* arg){
         request_id_packet->header = id_header;
         request_id_packet->id = global_id;
         id_assigned = global_id;
-        // printf("Client connected with ID: %d\n",global_id);
 
         global_id++;
 
@@ -297,7 +341,8 @@ void* thread_handler_TCP(void* arg){
 
     Packet_free((PacketHeader*) received_id_packet);
 
-    // printf("Sent a new IDPacket to client\n");
+    if (DEBUG)
+     printf("Sent a new IDPacket to client\n");
 
       // Receive the player's texture from client
     data_len = receivePacketTCP(socket_desc, data);
@@ -307,7 +352,8 @@ void* thread_handler_TCP(void* arg){
 
     Packet_free((PacketHeader*) received_profile_texture);
 
-    // printf("Received profile texture from client\n");
+    if (DEBUG)
+     printf("Received profile texture from client\n");
 
       // Resend the player's texture to client to confirm the texture
     ImagePacket* confirmed_player_texture = (ImagePacket*)malloc(sizeof(ImagePacket));
@@ -363,10 +409,16 @@ void* thread_handler_TCP(void* arg){
       printf("Veicolo con ID=%d aggiunto al mondo.\n", id_assigned);
     }
 
-      // close socket
-    ret = close(socket_desc);
-    if (ret < 0)
-        print_err("Cannot close socket for TCP connection ");
+      // Add new ClientVehicle to client_list
+    ClientVehicle* new_client = (ClientVehicle*) malloc(sizeof(ClientVehicle));
+    new_client->id = id_assigned;
+    new_client->sock_tcp = socket_desc;
+
+    List_insert(&client_list, client_list.last, (ListItem*)new_client);
+    if (DEBUG)
+      printf("Actual clients: %d\n",client_list.size);
+
+    printf("*** Veicolo %d connesso.\n", new_client->id);
 
     return NULL;
 }
@@ -409,16 +461,16 @@ int main(int argc, char **argv) {
                         */
     int ret;
 
-    ds_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    sock_udp = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
     my_addr.sin_family=AF_INET;
     my_addr.sin_port=htons(SERVER_PORT_UDP);
     my_addr.sin_addr.s_addr=INADDR_ANY;
 
     int reuseaddr_opt_udp = 1;
-    ret = setsockopt(ds_sock, SOL_SOCKET, SO_REUSEADDR, &reuseaddr_opt_udp, sizeof(reuseaddr_opt_udp));
+    ret = setsockopt(sock_udp, SOL_SOCKET, SO_REUSEADDR, &reuseaddr_opt_udp, sizeof(reuseaddr_opt_udp));
 
-    ret = bind(ds_sock,(const sockaddr*)&my_addr,sizeof(my_addr));
+    ret = bind(sock_udp,(const sockaddr*)&my_addr,sizeof(my_addr));
     if (ret < 0)
       print_err("Error while binding the UDP Server.\n");
 
@@ -442,15 +494,19 @@ int main(int argc, char **argv) {
 
     /*
     pthread_t prova;
-    ret = pthread_create(&prova, NULL, handler_di_prova, NULL);
+    ret = pthread_create(&prova, NULL, prova_func, NULL);
     if (ret != 0)
-      print_err("Cannot create UDP thread handler.\n");
+      print_err("Cannot create prova.\n");
 
     ret = pthread_detach(prova);
     if (ret != 0)
       print_err("Cannot detach");
     */
-  /*
+
+    usleep(1000);
+    printf("\n***** Premere CTRL+C per chiudere il server. *****\n\n");
+
+    /*
     starting server TCP -> IT WORKS !
                           */
   int socket_desc, client_desc;
@@ -482,7 +538,7 @@ int main(int argc, char **argv) {
       print_err("Cannot bind address to socket");
 
   // start listening
-  ret = listen(socket_desc, 1);
+  ret = listen(socket_desc, 10);
   if (ret < 0)
       print_err("Cannot listen on socket");
 
@@ -496,7 +552,8 @@ int main(int argc, char **argv) {
       if (client_desc < 0)
           print_err("Cannot open socket for incoming connection");
 
-      printf("New Client connected!\n");
+      if (DEBUG)
+        printf("New Client connected!\n");
 
       /* We pass the socket descriptor and the address information
        * for the incoming connection to the handler. */
@@ -519,6 +576,7 @@ int main(int argc, char **argv) {
   }
 
   free(client_addr);
+
   return 0;
 }
 
