@@ -215,41 +215,6 @@ void* sender_update_thread_handler_UDP(void* arg_null){
   return NULL;
 }
 
-void* texture_thread_handler(void* arg_null){
-
-  char data[INCOMING_DATA_SIZE];
-  int data_len;
-
-  int wait = 1;
-  while(wait){
-        // Receive serialized ImagePacket containing the new
-      data_len = receivePacketTCP(sock_tcp, data);
-
-      ImagePacket* received_texture = (ImagePacket*) Packet_deserialize(data, data_len);
-      int id = received_texture->id;
-      Image* image = received_texture->image;
-
-      Vehicle* target_vehicle = World_getVehicle(&world, id);
-      target_vehicle->texture = image;
-
-      Packet_free((PacketHeader *) received_texture);
-
-      if (DEBUG)
-        printf("Packet type: %d\nPacket size:%d\n\n", ((PacketHeader *) data)->type, ((PacketHeader *) data)->size);
-
-      if (DEBUG){
-        char name[20];
-        sprintf(name, "inClient%d.pgm", id);
-        Image_save(image, name);
-      }
-
-      bzero(data, data_len);
-
-      // Wait 1 sec
-    usleep(1000000);
-  }
-}
-
 int main(int argc, char **argv) {
   if (argc<3) {
     printf("Usage: %s <server_address> <player texture>\n", argv[0]);
