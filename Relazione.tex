@@ -40,7 +40,7 @@ Tutor: & I. Aloise \\
 %----------------------------------------------------------------------------------------
 \section*{Che cos'è}
 Il progetto sviluppato riguarda la realizzazione di un videogioco distribuito con paradigma client-server.
-Il videogioco consiste nel guidare un veicolo all'interno di una mappa. Ogni client, connettendosi al server, entra a far parte del gioco e può quindi visualizzare sulla mappa il proprio veicolo.
+Il videogioco consiste nel guidare un veicolo all'interno di una mappa. Ogni client, connettendosi al server, entra a far parte del gioco e può quindi visualizzare sulla mappa il proprio veicolo e quello dei giocatori connessi.
 
 %----------------------------------------------------------------------------------------
 %	SECTION 2
@@ -73,14 +73,14 @@ Il server gestisce il mondo di gioco, con all'interno i veicoli, e la lista di c
 \item{\textbf{main\_thread:}}
 Il main\_thread rimane sempre attivo fino alla pressione dei tasti CTRL+C. Esso si occupa di accettare i nuovi client che si connettono e prepararli al gioco. Al momento della connessione di un nuovo client viene creato un nuovo thread e lasciato eseguire in backgroung in cui si effettua l'assegnazione dell'id univoco al client, la trasmissione della mappa di gioco, e la ricezione della texture del veicolo del client, mentre il main\_thread si rimette in ascolto di un nuovo client in ingresso. Terminata la procedura di setup il client viene aggiunto alla lista dei client attualmente connnessi ed è pronto a scambiare i pacchetti di gioco.
 \item{\textbf{listener\_thread:}}
-Questo thread si occupa esclusivamente della ricezione dei pacchetti sul socket UDP. Alla ricezione di tale pacchetto il suo compito si differisce in base al tipo dello stesso (\textit{Disconnection, GetTexture, VehicleUpdate}).
+Questo thread si occupa esclusivamente della ricezione dei pacchetti sul socket UDP. Alla ricezione di tale pacchetto il suo compito differisce in base al tipo di quest'ultimo (\textit{Disconnection, GetTexture, VehicleUpdate}).
 \begin{description}
 \item{\textbf{Disconnection:}}
 Il compito del listener\_thread è quello di rimuovere il client mittente di tale pacchetto dalla lista dei client attualmente collegati, rimuovere il veicolo associato dal mondo di gioco ed in seguito notificare la sua disconnessione a tutti gli altri client.
 \item{\textbf{GetTexture:}}
 Se il listener\_thread riceve un pacchetto di tipo GetTexture allora un client sta richiedendo al texture di un veicolo che ancora non possiede. Semplicemente viene cercata la texture richiesta e spedita al client tramite un pacchetto PostTexture utilizzando il socket TCP.
 \item{\textbf{VehicleUpdate:}}
-Nel caso di ricezione di un pacchetto di tipo VehicleUpdate, il listener\_thread non fa altro che estrapolare le forze del veicolo dal pacchetto e inserirle nel proprio mondo. Soltanto successivamente viene effettuato un world update, in modo da tramutare tale forze in cambiamenti di posizione.
+Nel caso di ricezione di un pacchetto di tipo VehicleUpdate, il listener\_thread non fa altro che estrapolare le forze del veicolo dal pacchetto e inserirle nel proprio mondo. Soltanto successivamente viene effettuato un world update, in modo da tramutare tali forze in cambiamenti di posizione.
 \end{description}
 \item{\textbf{sender\_thread:}}
 Lo scopo di tale thread è quello di inviare costantemente gli aggiornamenti del mondo a tutti i client connessi. Di fatto viene costruito un \textit{WorldUpdatePacket} contenenti tutte le posizioni dei veicoli nel mondo, e inviati a tutti i client connessi tramite la connessione UDP. L'intervallo di tempo tra l'invio di un WorldUpdatePacket ed il successivo è impostato a 30 ms.
@@ -96,7 +96,7 @@ Tale thread si occupa della ricezione dei pacchetti di gioco sul socket UDP, dif
 \item{\textbf{Disconnection:}}
 Se il client riceve un pacchetto di tipo Disconnection, allora è stata notificata la disconnessione di un client dal mondo. Di fatto avviene la rimozione di tale veicolo dal mondo.
 \item{\textbf{WorldUpdate:}}
-Nel caso di ricezione di un pacchetto di tipo WorldUpdate, allora il client estrapola tutte le informazioni relative alle posizioni dei veicoli nel mondo. Se il veicolo è gia presente nella copia del mondo all'interno del client, semplicemente viene aggiornata la posizione del veicolo all'interno della corrispondente struttura Vehicle. Se al contrario il veicolo in questione non è presente all'interno della copia del mondo del client, si provvedde all'inizializzazione di tale veicolo, facendo richiesta della texture al server. Infine si aggiorna il mondo per permettere la corretta visualizzazione dei veicoli nel mondo.
+Nel caso di ricezione di un pacchetto di tipo WorldUpdate, allora il client estra-pola tutte le informazioni relative alle posizioni dei veicoli nel mondo. Se il veicolo è gia presente nella copia del mondo all'interno del client, semplicemente viene aggiornata la posizione del veicolo all'interno della corrispondente struttura Vehicle. Se al contrario il veicolo in questione non è presente all'interno della copia del mondo del client, si provvedde all'inizializzazione di tale veicolo, facendo richiesta della texture al server. Infine si aggiorna il mondo per permettere la corretta visualizzazione dei veicoli nel mondo.
 \end{description}
 \item{\textbf{sender\_thread:}}
 Lo scopo di tale thread è quello di inviare costantemente i comandi inseriti dall'utente, tramutati in forze, al server di gioco. Viene infatti costruito un \textit{VehicleUpdatePacket} contenente le forze del veicolo in questione. L'intervallo di tempo tra l'invio di un VehicleUpdatePacket ed il successivo è impostato a 30 ms.
